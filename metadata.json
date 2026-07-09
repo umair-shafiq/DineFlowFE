@@ -1,0 +1,6 @@
+{
+  "name": "ChefCommand",
+  "description": "Professional kitchen menu management, real-time stock control, and interactive order terminal.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

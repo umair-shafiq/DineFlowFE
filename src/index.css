@@ -1,0 +1,46 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Hanken+Grotesk:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Hanken Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  --color-brand-primary: #000103;
+  --color-brand-secondary: #4b41e1;
+  --color-brand-secondary-hover: #3730a3;
+  --color-brand-accent-green: #10b981;
+  --color-brand-accent-red: #ba1a1a;
+  
+  --color-surf-bg: #f8f9ff;
+  --color-surf-card: #ffffff;
+  --color-surf-low: #eff4ff;
+  --color-surf-container: #e5eeff;
+  --color-surf-high: #dce9ff;
+  --color-surf-highest: #d3e4fe;
+  
+  --color-text-primary: #0b1c30;
+  --color-text-secondary: #46474b;
+  --color-border-subtle: #c6c6cb;
+}
+
+@layer base {
+  body {
+    @apply bg-surf-bg text-text-primary font-sans antialiased selection:bg-brand-secondary/20 selection:text-brand-secondary;
+  }
+}
+
+/* Custom scrollbar utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Smooth active scale effect */
+.active-scale {
+  @apply transition-all active:scale-95 duration-100;
+}
+
