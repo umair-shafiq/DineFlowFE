@@ -49,34 +49,65 @@ export default function App() {
     setOrders(loadData<Order[]>('chef_orders', INITIAL_ORDERS));
 
     if (settingsToUse.enabled) {
+      let catSuccess = false;
+      let itemsSuccess = false;
+      let catErrorMsg = '';
+      let itemsErrorMsg = '';
+      let loadedCatsCount = 0;
+      let loadedItemsCount = 0;
+
+      // 1. Fetch categories
       try {
-        // Query live categories and dishes in parallel
-        const [fetchedCategories, fetchedItems] = await Promise.all([
-          apiCategories.list(),
-          apiMenuItems.list()
-        ]);
-        
+        const fetchedCategories = await apiCategories.list();
         setCategories(fetchedCategories);
+        loadedCatsCount = fetchedCategories.length;
+        catSuccess = true;
+      } catch (err: any) {
+        console.warn('Failed to load categories from Spring Boot. Falling back to LocalStorage.', err);
+        catErrorMsg = err.message || 'Network error';
+        setCategories(loadData<Category[]>('chef_categories', INITIAL_CATEGORIES));
+      }
+
+      // 2. Fetch menu items
+      try {
+        const fetchedItems = await apiMenuItems.list();
         setItems(fetchedItems);
+        loadedItemsCount = fetchedItems.length;
+        itemsSuccess = true;
+      } catch (err: any) {
+        console.warn('Failed to load menu items from Spring Boot. Falling back to LocalStorage.', err);
+        itemsErrorMsg = err.message || 'Network error';
+        setItems(loadData<MenuItem[]>('chef_menu_items', INITIAL_MENU_ITEMS));
+      }
+
+      if (catSuccess && itemsSuccess) {
         setApiConnected(true);
         setApiStatusMessage({
           type: 'success',
-          text: `Successfully connected to Spring Boot REST API! Loaded ${fetchedCategories.length} categories and ${fetchedItems.length} menu items.`
+          text: `Successfully connected to Spring Boot REST API! Loaded ${loadedCatsCount} categories and ${loadedItemsCount} menu items from the live database.`
         });
-      } catch (err: any) {
-        console.warn('Failed to connect to Spring Boot server. Falling back to local offline DB.', err);
+      } else if (catSuccess || itemsSuccess) {
+        setApiConnected(true);
+        setApiStatusMessage({
+          type: 'warning',
+          text: `Partially connected! ${
+            catSuccess 
+              ? `Loaded ${loadedCatsCount} categories from Spring Boot.` 
+              : `Categories failed: ${catErrorMsg} (fell back to local storage).`
+          } ${
+            itemsSuccess 
+              ? `Loaded ${loadedItemsCount} menu items from Spring Boot.` 
+              : `Menu items failed: ${itemsErrorMsg} (fell back to local storage).`
+          }`
+        });
+      } else {
         setApiConnected(false);
         setApiStatusMessage({
           type: 'error',
-          text: `Failed to connect to Spring Boot server at ${settingsToUse.baseUrl}. Using offline Local Storage backup instead. Check details in the Support tab.`
+          text: `Could not connect to Spring Boot server at "${settingsToUse.baseUrl}". Fell back to Local Storage backup.`
         });
-        
-        // Secure failover: Load offline data from LocalStorage
-        setCategories(loadData<Category[]>('chef_categories', INITIAL_CATEGORIES));
-        setItems(loadData<MenuItem[]>('chef_menu_items', INITIAL_MENU_ITEMS));
-      } finally {
-        setIsApiLoading(false);
       }
+      setIsApiLoading(false);
     } else {
       // Offline mode - Load directly from LocalStorage
       setCategories(loadData<Category[]>('chef_categories', INITIAL_CATEGORIES));
@@ -112,9 +143,30 @@ export default function App() {
 
         // Sync added
         for (const item of added) {
-          const res = await apiMenuItems.create(item);
-          if (res && res.id) {
-            item.id = res.id;
+          try {
+            const res = await apiMenuItems.create(item);
+            if (res && res.id) {
+              item.id = String(res.id);
+            }
+          } catch (err: any) {
+            // Check for 409 Conflict (item already exists in backend database)
+            if (err.status === 409 || String(err.message).includes('409') || String(err.message).includes('Conflict')) {
+              console.log(`Menu Item "${item.name}" already exists in Spring Boot DB. Resolving ID...`);
+              try {
+                const liveItems = await apiMenuItems.list();
+                const matchedLive = liveItems.find(i => i.name.toLowerCase() === item.name.toLowerCase());
+                if (matchedLive) {
+                  item.id = String(matchedLive.id);
+                  console.log(`Resolved ID "${item.id}" for Menu Item "${item.name}".`);
+                } else {
+                  throw err;
+                }
+              } catch (fetchErr) {
+                throw err;
+              }
+            } else {
+              throw err;
+            }
           }
         }
 
@@ -161,9 +213,30 @@ export default function App() {
 
         // Sync creates
         for (const cat of added) {
-          const res = await apiCategories.create({ name: cat.name });
-          if (res && res.id) {
-            cat.id = res.id;
+          try {
+            const res = await apiCategories.create({ name: cat.name });
+            if (res && res.id) {
+              cat.id = String(res.id);
+            }
+          } catch (err: any) {
+            // Check for 409 Conflict (category already exists in backend database)
+            if (err.status === 409 || String(err.message).includes('409') || String(err.message).includes('Conflict')) {
+              console.log(`Category "${cat.name}" already exists in Spring Boot DB. Resolving ID...`);
+              try {
+                const liveCategories = await apiCategories.list();
+                const matchedLive = liveCategories.find(c => c.name.toLowerCase() === cat.name.toLowerCase());
+                if (matchedLive) {
+                  cat.id = String(matchedLive.id);
+                  console.log(`Resolved ID "${cat.id}" for category "${cat.name}".`);
+                } else {
+                  throw err;
+                }
+              } catch (fetchErr) {
+                throw err;
+              }
+            } else {
+              throw err;
+            }
           }
         }
 

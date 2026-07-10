@@ -127,7 +127,9 @@ async function apiRequest<T>(endpointPath: string, method: string = 'GET', body?
 
   const response = await fetch(url, options);
   if (!response.ok) {
-    throw new Error(`API Error: Spring Boot returned status ${response.status} (${response.statusText})`);
+    const err = new Error(`API Error: Spring Boot returned status ${response.status} (${response.statusText})`) as any;
+    err.status = response.status;
+    throw err;
   }
 
   const text = await response.text();
@@ -138,22 +140,38 @@ async function apiRequest<T>(endpointPath: string, method: string = 'GET', body?
 export const apiCategories = {
   list: async (): Promise<Category[]> => {
     const settings = getApiSettings();
-    return apiRequest<Category[]>(settings.categoriesPath, 'GET');
+    const list = await apiRequest<any[]>(settings.categoriesPath, 'GET');
+    return list.map(cat => ({
+      ...cat,
+      id: String(cat.id)
+    }));
   },
   
   get: async (id: string): Promise<Category> => {
     const settings = getApiSettings();
-    return apiRequest<Category>(`${settings.categoriesPath}/${id}`, 'GET');
+    const res = await apiRequest<any>(`${settings.categoriesPath}/${id}`, 'GET');
+    return {
+      ...res,
+      id: String(res.id)
+    };
   },
   
   create: async (category: Omit<Category, 'id'> & { id?: string }): Promise<Category> => {
     const settings = getApiSettings();
-    return apiRequest<Category>(settings.categoriesPath, 'POST', category);
+    const res = await apiRequest<any>(settings.categoriesPath, 'POST', category);
+    return {
+      ...res,
+      id: String(res.id)
+    };
   },
   
   update: async (id: string, category: Category): Promise<Category> => {
     const settings = getApiSettings();
-    return apiRequest<Category>(`${settings.categoriesPath}/${id}`, 'PUT', category);
+    const res = await apiRequest<any>(`${settings.categoriesPath}/${id}`, 'PUT', category);
+    return {
+      ...res,
+      id: String(res.id)
+    };
   },
   
   delete: async (id: string): Promise<void> => {
@@ -166,22 +184,38 @@ export const apiCategories = {
 export const apiMenuItems = {
   list: async (): Promise<MenuItem[]> => {
     const settings = getApiSettings();
-    return apiRequest<MenuItem[]>(settings.menuItemsPath, 'GET');
+    const list = await apiRequest<any[]>(settings.menuItemsPath, 'GET');
+    return list.map(item => ({
+      ...item,
+      id: String(item.id)
+    }));
   },
   
   get: async (id: string): Promise<MenuItem> => {
     const settings = getApiSettings();
-    return apiRequest<MenuItem>(`${settings.menuItemsPath}/${id}`, 'GET');
+    const res = await apiRequest<any>(`${settings.menuItemsPath}/${id}`, 'GET');
+    return {
+      ...res,
+      id: String(res.id)
+    };
   },
   
   create: async (item: Omit<MenuItem, 'id'> & { id?: string }): Promise<MenuItem> => {
     const settings = getApiSettings();
-    return apiRequest<MenuItem>(settings.menuItemsPath, 'POST', item);
+    const res = await apiRequest<any>(settings.menuItemsPath, 'POST', item);
+    return {
+      ...res,
+      id: String(res.id)
+    };
   },
   
   update: async (id: string, item: MenuItem): Promise<MenuItem> => {
     const settings = getApiSettings();
-    return apiRequest<MenuItem>(`${settings.menuItemsPath}/${id}`, 'PUT', item);
+    const res = await apiRequest<any>(`${settings.menuItemsPath}/${id}`, 'PUT', item);
+    return {
+      ...res,
+      id: String(res.id)
+    };
   },
   
   delete: async (id: string): Promise<void> => {

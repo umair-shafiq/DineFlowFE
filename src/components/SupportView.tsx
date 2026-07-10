@@ -124,7 +124,11 @@ export default function SupportView({
         try {
           await apiCategories.create({ name: cat.name });
         } catch (e: any) {
-          console.warn(`Category "${cat.name}" might already exist: ${e.message}`);
+          if (e.status === 409 || String(e.message).includes('409') || String(e.message).includes('Conflict')) {
+            console.log(`Seeding: Category "${cat.name}" already exists in DB. Skipped.`);
+          } else {
+            console.warn(`Category "${cat.name}" might already exist: ${e.message}`);
+          }
         }
       }
 
@@ -143,7 +147,11 @@ export default function SupportView({
             modifiers: item.modifiers || []
           });
         } catch (e: any) {
-          console.warn(`Menu Item "${item.name}" upload failed/skipped: ${e.message}`);
+          if (e.status === 409 || String(e.message).includes('409') || String(e.message).includes('Conflict')) {
+            console.log(`Seeding: Menu Item "${item.name}" already exists in DB. Skipped.`);
+          } else {
+            console.warn(`Menu Item "${item.name}" upload failed/skipped: ${e.message}`);
+          }
         }
       }
 
