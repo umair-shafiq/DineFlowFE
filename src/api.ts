@@ -114,7 +114,12 @@ async function apiRequest<T>(endpointPath: string, method: string = 'GET', body?
   if (body !== undefined && method !== 'GET' && method !== 'DELETE') {
     // Exclude react-specific local temp IDs if backend generates numerical IDs or UUIDs
     const preparedBody = { ...body };
-    if (preparedBody.id && (preparedBody.id.startsWith('item-temp-') || preparedBody.id.startsWith('cat-temp-'))) {
+    if (preparedBody.id && (
+      String(preparedBody.id).startsWith('item-') || 
+      String(preparedBody.id).startsWith('cat-') || 
+      String(preparedBody.id).startsWith('item-temp-') || 
+      String(preparedBody.id).startsWith('cat-temp-')
+    )) {
       delete preparedBody.id;
     }
     options.body = JSON.stringify(preparedBody);
@@ -134,6 +139,11 @@ export const apiCategories = {
   list: async (): Promise<Category[]> => {
     const settings = getApiSettings();
     return apiRequest<Category[]>(settings.categoriesPath, 'GET');
+  },
+  
+  get: async (id: string): Promise<Category> => {
+    const settings = getApiSettings();
+    return apiRequest<Category>(`${settings.categoriesPath}/${id}`, 'GET');
   },
   
   create: async (category: Omit<Category, 'id'> & { id?: string }): Promise<Category> => {
@@ -157,6 +167,11 @@ export const apiMenuItems = {
   list: async (): Promise<MenuItem[]> => {
     const settings = getApiSettings();
     return apiRequest<MenuItem[]>(settings.menuItemsPath, 'GET');
+  },
+  
+  get: async (id: string): Promise<MenuItem> => {
+    const settings = getApiSettings();
+    return apiRequest<MenuItem>(`${settings.menuItemsPath}/${id}`, 'GET');
   },
   
   create: async (item: Omit<MenuItem, 'id'> & { id?: string }): Promise<MenuItem> => {
