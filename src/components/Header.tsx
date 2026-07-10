@@ -8,6 +8,8 @@ interface HeaderProps {
   onSearchChange: (query: string) => void;
   onAddShortcutClick: () => void;
   pendingOrdersCount: number;
+  apiEnabled?: boolean;
+  apiConnected?: boolean | null;
 }
 
 export default function Header({
@@ -16,7 +18,9 @@ export default function Header({
   searchQuery,
   onSearchChange,
   onAddShortcutClick,
-  pendingOrdersCount
+  pendingOrdersCount,
+  apiEnabled = false,
+  apiConnected = null
 }: HeaderProps) {
   
   // Mapping of main top bar links to our internal navigation states
@@ -122,6 +126,30 @@ export default function Header({
             <Settings className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Spring Boot Connection Status Indicator */}
+        {apiEnabled && (
+          <button
+            onClick={() => onTabChange('support')}
+            className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold tracking-tight transition-all active-scale ${
+              apiConnected === true
+                ? 'bg-brand-accent-green/5 border-brand-accent-green/25 text-brand-accent-green'
+                : apiConnected === false
+                ? 'bg-brand-accent-red/5 border-brand-accent-red/25 text-brand-accent-red'
+                : 'bg-surf-container border-border-subtle text-text-secondary animate-pulse'
+            }`}
+            title="Spring Boot API Connection Status. Click to configure."
+          >
+            <span className={`w-2 h-2 rounded-full ${
+              apiConnected === true
+                ? 'bg-brand-accent-green animate-pulse'
+                : apiConnected === false
+                ? 'bg-brand-accent-red'
+                : 'bg-text-secondary/50'
+            }`} />
+            <span>DB: {apiConnected === true ? 'Online' : apiConnected === false ? 'Offline' : 'Checking...'}</span>
+          </button>
+        )}
 
         {/* Quick Add Button */}
         <button 
