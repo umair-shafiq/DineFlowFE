@@ -4,6 +4,29 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>My Google AI Studio App</title>
+    <script>
+      (function() {
+        try {
+          var targets = [typeof window !== 'undefined' ? window : null, typeof globalThis !== 'undefined' ? globalThis : null, typeof self !== 'undefined' ? self : null];
+          if (typeof Window !== 'undefined' && Window.prototype) targets.push(Window.prototype);
+          targets.forEach(function(target) {
+            if (!target) return;
+            try {
+              var desc = Object.getOwnPropertyDescriptor(target, 'fetch');
+              if (desc && desc.get && !desc.set) {
+                var currentFetch = desc.get.call(target);
+                Object.defineProperty(target, 'fetch', {
+                  get: function() { return currentFetch; },
+                  set: function(val) { if (val) currentFetch = val; },
+                  configurable: true,
+                  enumerable: true
+                });
+              }
+            } catch (e) {}
+          });
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -13,7 +13,7 @@ const DEFAULT_SETTINGS: SpringBootSettings = {
   enabled: false,
   baseUrl: 'http://localhost:8080',
   categoriesPath: '/api/categories',
-  menuItemsPath: '/api/menuitems'
+  menuItemsPath: '/api/menu-items'
 };
 
 // Load settings from localStorage
@@ -21,7 +21,11 @@ export function getApiSettings(): SpringBootSettings {
   try {
     const saved = localStorage.getItem(SETTINGS_KEY);
     if (saved) {
-      return { ...DEFAULT_SETTINGS, ...JSON.parse(saved) };
+      const parsed = JSON.parse(saved);
+      if (parsed.menuItemsPath === '/api/menuitems') {
+        parsed.menuItemsPath = '/api/menu-items';
+      }
+      return { ...DEFAULT_SETTINGS, ...parsed };
     }
   } catch (e) {
     console.error('Error reading Spring Boot settings', e);
@@ -136,42 +140,113 @@ async function apiRequest<T>(endpointPath: string, method: string = 'GET', body?
   return text ? JSON.parse(text) : ({} as T);
 }
 
+// Normalization helpers
+function normalizeCategory(raw: any): Category {
+  if (!raw) return raw;
+  return {
+    id: String(raw.id !== undefined && raw.id !== null ? raw.id : ''),
+    name: typeof raw === 'string' ? raw : (raw.name || String(raw.id || ''))
+  };
+}
+
+function normalizeMenuItem(raw: any): MenuItem {
+  if (!raw) return raw;
+  
+  // Extract category string safely whether Spring Boot sent an object { id: 5, name: "Cold Drinks" } or a plain string
+  let categoryName = 'Uncategorized';
+  let categoryId: number | string | undefined = undefined;
+  if (raw.category && typeof raw.category === 'object') {
+    categoryName = raw.category.name || 'Uncategorized';
+    categoryId = raw.category.id;
+  } else if (typeof raw.category === 'string') {
+    categoryName = raw.category;
+  } else if (raw.categoryName) {
+    categoryName = raw.categoryName;
+  }
+  if (raw.categoryId !== undefined && categoryId === undefined) {
+    categoryId = raw.categoryId;
+  }
+
+  // Handle image vs imageUrl
+  const image = raw.imageUrl || raw.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=600&q=80';
+
+  const outOfStock = Boolean(
+    raw.outOfStock === true || 
+    raw.status === 'OUT_OF_STOCK' || 
+    raw.availability === 'OUT_OF_STOCK' ||
+    raw.available === false
+  );
+
+  return {
+    id: String(raw.id !== undefined && raw.id !== null ? raw.id : ''),
+    name: raw.name || '',
+    price: Number(raw.price || 0),
+    category: categoryName,
+    categoryId: categoryId,
+    outOfStock: outOfStock,
+    image: image,
+    imageUrl: image,
+    description: raw.description || '',
+    modifiers: raw.modifiers || []
+  };
+}
+
+// Helper to resolve category ID from string name or object for POST / PUT payloads
+async function resolveCategoryId(item: MenuItem | any): Promise<number | string> {
+  // 1. If item already has a numeric categoryId or category object ID, use it
+  if (item.categoryId !== undefined && item.categoryId !== null && item.categoryId !== '') {
+    return !isNaN(Number(item.categoryId)) ? Number(item.categoryId) : item.categoryId;
+  }
+  if (item.category && typeof item.category === 'object' && item.category.id !== undefined) {
+    return !isNaN(Number(item.category.id)) ? Number(item.category.id) : item.category.id;
+  }
+
+  const categoryName = typeof item.category === 'object' ? (item.category.name || '') : (item.category || '');
+  if (!categoryName) return 1;
+
+  try {
+    // 2. Look up from localStorage cache first
+    const localCats = JSON.parse(localStorage.getItem('chef_categories') || '[]');
+    let match = localCats.find((c: any) => String(c.name).trim().toLowerCase() === String(categoryName).trim().toLowerCase());
+    if (match && match.id !== undefined) {
+      return !isNaN(Number(match.id)) ? Number(match.id) : match.id;
+    }
+    // 3. If not found locally, fetch live list from categories API
+    const liveCats = await apiCategories.list();
+    match = liveCats.find((c: any) => String(c.name).trim().toLowerCase() === String(categoryName).trim().toLowerCase());
+    if (match && match.id !== undefined) {
+      return !isNaN(Number(match.id)) ? Number(match.id) : match.id;
+    }
+  } catch (e) {
+    console.warn('Error resolving categoryId:', e);
+  }
+  return 1; // fallback ID if category cannot be resolved
+}
+
 // Categories REST Methods
 export const apiCategories = {
   list: async (): Promise<Category[]> => {
     const settings = getApiSettings();
     const list = await apiRequest<any[]>(settings.categoriesPath, 'GET');
-    return list.map(cat => ({
-      ...cat,
-      id: String(cat.id)
-    }));
+    return Array.isArray(list) ? list.map(normalizeCategory) : [];
   },
   
   get: async (id: string): Promise<Category> => {
     const settings = getApiSettings();
     const res = await apiRequest<any>(`${settings.categoriesPath}/${id}`, 'GET');
-    return {
-      ...res,
-      id: String(res.id)
-    };
+    return normalizeCategory(res);
   },
   
   create: async (category: Omit<Category, 'id'> & { id?: string }): Promise<Category> => {
     const settings = getApiSettings();
     const res = await apiRequest<any>(settings.categoriesPath, 'POST', category);
-    return {
-      ...res,
-      id: String(res.id)
-    };
+    return normalizeCategory(res);
   },
   
   update: async (id: string, category: Category): Promise<Category> => {
     const settings = getApiSettings();
     const res = await apiRequest<any>(`${settings.categoriesPath}/${id}`, 'PUT', category);
-    return {
-      ...res,
-      id: String(res.id)
-    };
+    return normalizeCategory(res);
   },
   
   delete: async (id: string): Promise<void> => {
@@ -185,37 +260,65 @@ export const apiMenuItems = {
   list: async (): Promise<MenuItem[]> => {
     const settings = getApiSettings();
     const list = await apiRequest<any[]>(settings.menuItemsPath, 'GET');
-    return list.map(item => ({
-      ...item,
-      id: String(item.id)
-    }));
+    return Array.isArray(list) ? list.map(normalizeMenuItem) : [];
   },
   
   get: async (id: string): Promise<MenuItem> => {
     const settings = getApiSettings();
     const res = await apiRequest<any>(`${settings.menuItemsPath}/${id}`, 'GET');
-    return {
-      ...res,
-      id: String(res.id)
-    };
+    return normalizeMenuItem(res);
   },
   
   create: async (item: Omit<MenuItem, 'id'> & { id?: string }): Promise<MenuItem> => {
     const settings = getApiSettings();
-    const res = await apiRequest<any>(settings.menuItemsPath, 'POST', item);
-    return {
-      ...res,
-      id: String(res.id)
+    const catId = await resolveCategoryId(item);
+    const payload = {
+      name: item.name,
+      description: item.description || '',
+      price: Number(item.price || 0),
+      imageUrl: item.imageUrl || item.image || '',
+      categoryId: catId
     };
+    const res = await apiRequest<any>(settings.menuItemsPath, 'POST', payload);
+    return normalizeMenuItem(res);
   },
   
   update: async (id: string, item: MenuItem): Promise<MenuItem> => {
     const settings = getApiSettings();
-    const res = await apiRequest<any>(`${settings.menuItemsPath}/${id}`, 'PUT', item);
-    return {
-      ...res,
-      id: String(res.id)
+    const catId = await resolveCategoryId(item);
+    const payload = {
+      name: item.name,
+      description: item.description || '',
+      price: Number(item.price || 0),
+      imageUrl: item.imageUrl || item.image || '',
+      categoryId: catId
     };
+    // 1. Execute PUT update for core item fields
+    const res = await apiRequest<any>(`${settings.menuItemsPath}/${id}`, 'PUT', payload);
+    let normalized = normalizeMenuItem(res);
+
+    // 2. Execute PATCH availability endpoint as requested by user specification
+    try {
+      const statusParam = item.outOfStock ? 'OUT_OF_STOCK' : 'AVAILABLE';
+      const availRes = await apiRequest<any>(`${settings.menuItemsPath}/${id}/availability?status=${statusParam}`, 'PATCH');
+      if (availRes && typeof availRes === 'object') {
+        normalized = normalizeMenuItem(availRes);
+      } else {
+        normalized.outOfStock = item.outOfStock;
+      }
+    } catch (patchErr: any) {
+      console.warn(`Note: Availability PATCH check for item ${id}: ${patchErr.message}`);
+      normalized.outOfStock = item.outOfStock;
+    }
+
+    return normalized;
+  },
+
+  updateAvailability: async (id: string, outOfStock: boolean): Promise<MenuItem> => {
+    const settings = getApiSettings();
+    const statusParam = outOfStock ? 'OUT_OF_STOCK' : 'AVAILABLE';
+    const res = await apiRequest<any>(`${settings.menuItemsPath}/${id}/availability?status=${statusParam}`, 'PATCH');
+    return normalizeMenuItem(res);
   },
   
   delete: async (id: string): Promise<void> => {

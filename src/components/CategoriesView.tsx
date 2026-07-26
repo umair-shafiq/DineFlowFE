@@ -22,7 +22,10 @@ export default function CategoriesView({
 
   // Count items per category
   const getItemCount = (categoryName: string) => {
-    return items.filter(item => item.category === categoryName).length;
+    return items.filter(item => {
+      const catName = typeof item.category === 'object' ? ((item.category as any).name || '') : (item.category || '');
+      return catName === categoryName;
+    }).length;
   };
 
   // Add Category

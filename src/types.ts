@@ -3,8 +3,10 @@ export interface MenuItem {
   name: string;
   price: number;
   category: string;
+  categoryId?: number | string;
   outOfStock: boolean;
   image: string;
+  imageUrl?: string;
   description: string;
   modifiers?: string[]; // IDs of ModifierGroup or specific Modifier IDs
 }

@@ -402,7 +402,7 @@ export default function OrdersView({
                         ${item.price.toFixed(2)}
                       </p>
                       <span className="font-mono text-[9px] font-bold text-text-secondary uppercase tracking-wider block mt-1">
-                        {item.category}
+                        {typeof item.category === 'object' ? ((item.category as any).name || 'Uncategorized') : (item.category || 'Uncategorized')}
                       </span>
                     </div>
                   </button>

@@ -68,7 +68,7 @@ export default function MenuItemsView({
   const openEditModal = (item: MenuItem) => {
     setEditingItem(item);
     setFormName(item.name);
-    setFormCategory(item.category);
+    setFormCategory(typeof item.category === 'object' ? ((item.category as any).name || '') : item.category);
     setFormPrice(item.price.toString());
     setFormImage(item.image);
     setFormDescription(item.description || '');
@@ -181,9 +181,10 @@ export default function MenuItemsView({
 
   // Filter items by category and search query
   const filteredItems = items.filter(item => {
-    const matchesCategory = activeCategory === 'All' || item.category === activeCategory;
+    const itemCatName = typeof item.category === 'object' ? ((item.category as any).name || '') : (item.category || '');
+    const matchesCategory = activeCategory === 'All' || itemCatName === activeCategory;
     const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          item.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          itemCatName.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase()));
     return matchesCategory && matchesSearch;
   });
@@ -296,7 +297,7 @@ export default function MenuItemsView({
                   {item.name}
                 </h3>
                 <span className="font-mono text-[10px] font-bold bg-surf-low px-2 py-1 rounded text-brand-secondary shrink-0 tracking-wider">
-                  {item.category}
+                  {typeof item.category === 'object' ? ((item.category as any).name || 'Uncategorized') : (item.category || 'Uncategorized')}
                 </span>
               </div>
               
