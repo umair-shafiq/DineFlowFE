@@ -170,12 +170,13 @@ function normalizeMenuItem(raw: any): MenuItem {
   // Handle image vs imageUrl
   const image = raw.imageUrl || raw.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=600&q=80';
 
-  const outOfStock = Boolean(
-    raw.outOfStock === true || 
-    raw.status === 'OUT_OF_STOCK' || 
-    raw.availability === 'OUT_OF_STOCK' ||
-    raw.available === false
-  );
+  const availabilityStatus =
+  raw.availabilityStatus ||
+  raw.status ||
+  raw.availability ||
+  (raw.outOfStock ? 'OUT_OF_STOCK' : 'AVAILABLE');
+
+const outOfStock = availabilityStatus === 'OUT_OF_STOCK';
 
   return {
     id: String(raw.id !== undefined && raw.id !== null ? raw.id : ''),
@@ -183,7 +184,8 @@ function normalizeMenuItem(raw: any): MenuItem {
     price: Number(raw.price || 0),
     category: categoryName,
     categoryId: categoryId,
-    outOfStock: outOfStock,
+    availabilityStatus,
+    outOfStock,
     image: image,
     imageUrl: image,
     description: raw.description || '',
@@ -299,7 +301,7 @@ export const apiMenuItems = {
 
     // 2. Execute PATCH availability endpoint as requested by user specification
     try {
-      const statusParam = item.outOfStock ? 'OUT_OF_STOCK' : 'AVAILABLE';
+      const statusParam = item.availabilityStatus ?? (item.outOfStock ? 'OUT_OF_STOCK' : 'AVAILABLE');
       const availRes = await apiRequest<any>(`${settings.menuItemsPath}/${id}/availability?status=${statusParam}`, 'PATCH');
       if (availRes && typeof availRes === 'object') {
         normalized = normalizeMenuItem(availRes);

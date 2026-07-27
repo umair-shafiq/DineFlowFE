@@ -7,6 +7,7 @@ export interface MenuItem {
   outOfStock: boolean;
   image: string;
   imageUrl?: string;
+  availabilityStatus?: 'AVAILABLE' | 'OUT_OF_STOCK';
   description: string;
   modifiers?: string[]; // IDs of ModifierGroup or specific Modifier IDs
 }

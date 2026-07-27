@@ -72,7 +72,7 @@ export default function MenuItemsView({
     setFormPrice(item.price.toString());
     setFormImage(item.image);
     setFormDescription(item.description || '');
-    setFormOutOfStock(item.outOfStock);
+    setFormOutOfStock( item.availabilityStatus === 'OUT_OF_STOCK');
     setFormModifiers(item.modifiers || []);
     setValidationError('');
     setIsAddModalOpen(true);
@@ -119,14 +119,20 @@ export default function MenuItemsView({
       // Update item
       const updatedList = items.map(item => {
         if (item.id === editingItem.id) {
+          const selectedCategory = categories.find(
+            c => c.name === formCategory
+          );
           return {
             ...item,
             name: formName.trim(),
             category: formCategory,
+            categoryId: selectedCategory?.id,
             price: priceNum,
             image: finalImageUrl,
+            imageUrl: finalImageUrl,
             description: formDescription.trim(),
             outOfStock: formOutOfStock,
+            availabilityStatus: formOutOfStock ? 'OUT_OF_STOCK' : 'AVAILABLE',
             modifiers: formModifiers
           };
         }
@@ -141,8 +147,10 @@ export default function MenuItemsView({
         category: formCategory,
         price: priceNum,
         image: finalImageUrl,
+        imageUrl: finalImageUrl,
         description: formDescription.trim(),
         outOfStock: formOutOfStock,
+        availabilityStatus: formOutOfStock ? 'OUT_OF_STOCK' : 'AVAILABLE',
         modifiers: formModifiers
       };
       onItemsChange([...items, newItem]);
