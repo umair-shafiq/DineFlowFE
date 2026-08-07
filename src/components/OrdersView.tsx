@@ -70,8 +70,8 @@ export default function OrdersView({
     }
   };
 
-  // Search single order by ID using GET /api/orders/{id}
-  const handleSearchOrderById = async (e: React.FormEvent) => {
+  // Search single order by Ticket using GET /api/orders/{ticket}
+  const handleSearchOrderByTicket = async (e: React.FormEvent) => {
     e.preventDefault();
     const query = searchOrderId.trim();
     if (!query) return;
@@ -80,25 +80,33 @@ export default function OrdersView({
     setSearchError(null);
     setSearchedOrder(null);
 
+    // Search locally first in loaded orders array
+    const cleanQuery = query.toLowerCase();
+    const localMatch = orders.find(o => 
+      String(o.orderNumber || '').toLowerCase() === cleanQuery ||
+      String(o.id || '').toLowerCase() === cleanQuery ||
+      String(o.orderId || '').toLowerCase() === cleanQuery ||
+      String(o.orderNumber || '').toLowerCase() === `ord-${cleanQuery}`
+    );
+
     try {
       const result = await apiOrders.get(query);
-      if (result) {
+      if (result && (result.id || result.orderNumber)) {
         setSearchedOrder(result);
+      } else if (localMatch) {
+        setSearchedOrder(localMatch);
       } else {
-        setSearchError(`No order found with ID "${query}".`);
+        setSearchError(`Order ticket "${query}" not found (404 Not Found).`);
       }
     } catch (err: any) {
-      // Fallback search locally in loaded state
-      const match = orders.find(o => 
-        String(o.id) === query || 
-        String(o.orderId) === query || 
-        String(o.orderNumber).toLowerCase() === query.toLowerCase() ||
-        String(o.orderNumber).toLowerCase() === `ord-${query}`.toLowerCase()
-      );
-      if (match) {
-        setSearchedOrder(match);
+      if (localMatch) {
+        setSearchedOrder(localMatch);
       } else {
-        setSearchError(`Order ID "${query}" not found (${err.message || '404 Not Found'}).`);
+        const is404 = err.status === 404 || String(err.message || '').includes('404');
+        const errMsg = is404 
+          ? `Order ticket "${query}" not found (404 Not Found).`
+          : `Order ticket "${query}" not found (${err.message || '404 Not Found'}).`;
+        setSearchError(errMsg);
       }
     } finally {
       setIsSearching(false);
@@ -319,14 +327,14 @@ export default function OrdersView({
             </div>
 
             {/* Ticket Lookup */}
-            <form onSubmit={handleSearchOrderById} className="flex items-center gap-2">
+            <form onSubmit={handleSearchOrderByTicket} className="flex items-center gap-2">
               <div className="relative flex-1 sm:w-64">
                 <Search className="w-3.5 h-3.5 text-text-secondary absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   value={searchOrderId}
                   onChange={(e) => setSearchOrderId(e.target.value)}
-                  placeholder="Order # or ID (e.g. 1001 or 1)..."
+                  placeholder="Order Ticket (e.g. ORD-D95B43B0)..."
                   className="w-full bg-surf-low border border-border-subtle rounded-lg pl-8 pr-3 py-1.5 text-xs focus:ring-1 focus:ring-brand-secondary outline-none text-text-primary"
                 />
               </div>
@@ -376,7 +384,7 @@ export default function OrdersView({
 
                 <div className="space-y-3 text-xs">
                   <div className="grid grid-cols-2 gap-2 bg-surf-low p-3 rounded-xl border border-border-subtle font-sans">
-                    <div><span className="text-text-secondary">Order ID:</span> <strong className="text-brand-primary font-mono ml-1">{searchedOrder.orderId || searchedOrder.id}</strong></div>
+                    <div><span className="text-text-secondary">Ticket #:</span> <strong className="text-brand-primary font-mono ml-1">{searchedOrder.orderNumber || searchedOrder.orderId || searchedOrder.id}</strong></div>
                     <div><span className="text-text-secondary">Table:</span> <strong className="text-brand-primary font-mono ml-1">{searchedOrder.tableNumber}</strong></div>
                     <div><span className="text-text-secondary">Status:</span> <strong className="text-brand-secondary uppercase ml-1">{searchedOrder.status}</strong></div>
                     <div><span className="text-text-secondary">Placed:</span> <strong className="text-brand-primary ml-1">{new Date(searchedOrder.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong></div>
