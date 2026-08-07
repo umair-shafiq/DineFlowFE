@@ -41,6 +41,7 @@ export default function SupportView({
   const [baseUrlInput, setBaseUrlInput] = useState(apiSettings.baseUrl);
   const [categoriesPathInput, setCategoriesPathInput] = useState(apiSettings.categoriesPath);
   const [menuItemsPathInput, setMenuItemsPathInput] = useState(apiSettings.menuItemsPath);
+  const [ordersPathInput, setOrdersPathInput] = useState(apiSettings.ordersPath || '/api/orders');
 
   // Testing & seeding states
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -53,6 +54,7 @@ export default function SupportView({
     setBaseUrlInput(apiSettings.baseUrl);
     setCategoriesPathInput(apiSettings.categoriesPath);
     setMenuItemsPathInput(apiSettings.menuItemsPath);
+    setOrdersPathInput(apiSettings.ordersPath || '/api/orders');
   }, [apiSettings]);
 
   // Load scratchpad notes on load
@@ -82,7 +84,8 @@ export default function SupportView({
       enabled: isEnabled,
       baseUrl: baseUrlInput.trim() || 'http://localhost:8080',
       categoriesPath: categoriesPathInput.trim() || '/api/categories',
-      menuItemsPath: menuItemsPathInput.trim() || '/api/menuitems'
+      menuItemsPath: menuItemsPathInput.trim() || '/api/menu-items',
+      ordersPath: ordersPathInput.trim() || '/api/orders'
     };
     onApiSettingsChange(newSettings);
     setTestResult(null);
@@ -300,8 +303,8 @@ export default function SupportView({
 
               {/* Input details */}
               <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-1.5 md:col-span-1">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="space-y-1.5">
                     <label className="font-mono text-[10px] font-bold text-text-secondary uppercase tracking-wider block">
                       Server Base URL
                     </label>
@@ -335,7 +338,20 @@ export default function SupportView({
                       type="text"
                       value={menuItemsPathInput}
                       onChange={(e) => setMenuItemsPathInput(e.target.value)}
-                      placeholder="/api/menuitems"
+                      placeholder="/api/menu-items"
+                      className="w-full bg-surf-low border border-border-subtle rounded-lg px-3.5 py-2 text-sm focus:ring-1 focus:ring-brand-secondary outline-none text-text-primary"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="font-mono text-[10px] font-bold text-text-secondary uppercase tracking-wider block">
+                      Orders Path
+                    </label>
+                    <input
+                      type="text"
+                      value={ordersPathInput}
+                      onChange={(e) => setOrdersPathInput(e.target.value)}
+                      placeholder="/api/orders"
                       className="w-full bg-surf-low border border-border-subtle rounded-lg px-3.5 py-2 text-sm focus:ring-1 focus:ring-brand-secondary outline-none text-text-primary"
                     />
                   </div>

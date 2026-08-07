@@ -121,21 +121,25 @@ export default function OrdersView({
     e.preventDefault();
     if (cart.length === 0) return;
 
+    const tableIdNum = parseInt(tableNumber.replace(/\D/g, '')) || 2;
+
     const newOrder: Order = {
       id: 'order-' + Date.now(),
       orderNumber: (orders.length + 1001).toString(),
       items: cart,
       total: cartTotal,
       status: 'pending',
+      orderStatus: 'PLACED',
       createdAt: new Date().toISOString(),
-      tableNumber: tableNumber.trim() || 'Table 01',
-      customerName: customerName.trim() || 'Guest Customer'
+      tableNumber: tableNumber.trim() || `Table 0${tableIdNum}`,
+      restaurantTableId: tableIdNum,
+      customerName: customerName.trim() || `Table 0${tableIdNum}`
     };
 
     onOrdersChange([newOrder, ...orders]);
     setCart([]);
     setCustomerName('');
-    setTableNumber('Table 01');
+    setTableNumber('Table 02');
     setDisplayMode('board'); // Return to daily order board
   };
 
@@ -302,14 +306,28 @@ export default function OrdersView({
                     ))}
                   </div>
 
-                  {/* Total and Date */}
-                  <div className="px-5 py-3.5 bg-surf-low/40 border-t border-border-subtle/40 flex justify-between items-center text-xs">
-                    <span className="font-mono text-text-secondary">
-                      {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                    <p className="font-sans font-bold text-brand-primary">
-                      Total: <span className="font-mono text-sm text-brand-secondary font-extrabold">${order.total.toFixed(2)}</span>
-                    </p>
+                  {/* Total, Subtotal, Tax and Time */}
+                  <div className="px-5 py-3 bg-surf-low/40 border-t border-border-subtle/40 space-y-1 text-xs">
+                    {order.subtotal !== undefined && order.subtotal > 0 && (
+                      <div className="flex justify-between text-text-secondary text-[11px]">
+                        <span>Subtotal:</span>
+                        <span className="font-mono">${order.subtotal.toFixed(2)}</span>
+                      </div>
+                    )}
+                    {order.taxAmount !== undefined && order.taxAmount > 0 && (
+                      <div className="flex justify-between text-text-secondary text-[11px]">
+                        <span>Tax:</span>
+                        <span className="font-mono">${order.taxAmount.toFixed(2)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center font-sans font-bold text-brand-primary pt-0.5">
+                      <span className="font-mono text-text-secondary">
+                        {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      <p>
+                        Total: <span className="font-mono text-sm text-brand-secondary font-extrabold">${(order.totalAmount || order.total).toFixed(2)}</span>
+                      </p>
+                    </div>
                   </div>
 
                   {/* Actions Bar */}

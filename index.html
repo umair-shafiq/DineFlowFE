@@ -7,23 +7,34 @@
     <script>
       (function() {
         try {
-          var targets = [typeof window !== 'undefined' ? window : null, typeof globalThis !== 'undefined' ? globalThis : null, typeof self !== 'undefined' ? self : null];
-          if (typeof Window !== 'undefined' && Window.prototype) targets.push(Window.prototype);
-          targets.forEach(function(target) {
+          var realFetch = typeof window !== 'undefined' ? window.fetch : null;
+          if (!realFetch && typeof globalThis !== 'undefined') realFetch = globalThis.fetch;
+
+          function fixFetchOnTarget(target) {
             if (!target) return;
             try {
-              var desc = Object.getOwnPropertyDescriptor(target, 'fetch');
-              if (desc && desc.get && !desc.set) {
-                var currentFetch = desc.get.call(target);
-                Object.defineProperty(target, 'fetch', {
-                  get: function() { return currentFetch; },
-                  set: function(val) { if (val) currentFetch = val; },
-                  configurable: true,
-                  enumerable: true
-                });
-              }
+              var val = realFetch || target.fetch;
+              Object.defineProperty(target, 'fetch', {
+                get: function() { return val; },
+                set: function(newFetch) { val = newFetch; },
+                configurable: true,
+                enumerable: true
+              });
             } catch (e) {}
-          });
+          }
+
+          if (typeof Window !== 'undefined' && Window.prototype) {
+            fixFetchOnTarget(Window.prototype);
+          }
+          if (typeof window !== 'undefined') {
+            fixFetchOnTarget(window);
+          }
+          if (typeof globalThis !== 'undefined') {
+            fixFetchOnTarget(globalThis);
+          }
+          if (typeof self !== 'undefined') {
+            fixFetchOnTarget(self);
+          }
         } catch (e) {}
       })();
     </script>

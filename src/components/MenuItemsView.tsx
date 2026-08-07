@@ -119,7 +119,7 @@ export default function MenuItemsView({
       // Update item
       const updatedList = items.map(item => {
         if (item.id === editingItem.id) {
-          const selectedCategory = categories.find(
+           const selectedCategory = categories.find(
             c => c.name === formCategory
           );
           return {

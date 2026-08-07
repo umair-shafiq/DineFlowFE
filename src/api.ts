@@ -1,10 +1,11 @@
-import { MenuItem, Category } from './types';
+import { MenuItem, Category, Order, OrderItem } from './types';
 
 export interface SpringBootSettings {
   enabled: boolean;
   baseUrl: string;
   categoriesPath: string;
   menuItemsPath: string;
+  ordersPath: string;
 }
 
 const SETTINGS_KEY = 'spring_boot_connector_settings';
@@ -13,7 +14,8 @@ const DEFAULT_SETTINGS: SpringBootSettings = {
   enabled: false,
   baseUrl: 'http://localhost:8080',
   categoriesPath: '/api/categories',
-  menuItemsPath: '/api/menu-items'
+  menuItemsPath: '/api/menu-items',
+  ordersPath: '/api/orders'
 };
 
 // Load settings from localStorage
@@ -24,6 +26,9 @@ export function getApiSettings(): SpringBootSettings {
       const parsed = JSON.parse(saved);
       if (parsed.menuItemsPath === '/api/menuitems') {
         parsed.menuItemsPath = '/api/menu-items';
+      }
+      if (!parsed.ordersPath) {
+        parsed.ordersPath = '/api/orders';
       }
       return { ...DEFAULT_SETTINGS, ...parsed };
     }
@@ -176,7 +181,7 @@ function normalizeMenuItem(raw: any): MenuItem {
   raw.availability ||
   (raw.outOfStock ? 'OUT_OF_STOCK' : 'AVAILABLE');
 
-const outOfStock = availabilityStatus === 'OUT_OF_STOCK';
+  const outOfStock = availabilityStatus === 'OUT_OF_STOCK';
 
   return {
     id: String(raw.id !== undefined && raw.id !== null ? raw.id : ''),
@@ -195,7 +200,27 @@ const outOfStock = availabilityStatus === 'OUT_OF_STOCK';
 
 // Helper to resolve category ID from string name or object for POST / PUT payloads
 async function resolveCategoryId(item: MenuItem | any): Promise<number | string> {
-  // 1. If item already has a numeric categoryId or category object ID, use it
+  const categoryName = typeof item.category === 'object' ? (item.category.name || '') : (item.category || '');
+
+  // 1. Prioritize category name lookup in local cache or live categories so updated categories get new IDs
+  if (categoryName) {
+    try {
+      const localCats = JSON.parse(localStorage.getItem('chef_categories') || '[]');
+      let match = localCats.find((c: any) => String(c.name).trim().toLowerCase() === String(categoryName).trim().toLowerCase());
+      if (match && match.id !== undefined && match.id !== '') {
+        return !isNaN(Number(match.id)) ? Number(match.id) : match.id;
+      }
+      const liveCats = await apiCategories.list();
+      match = liveCats.find((c: any) => String(c.name).trim().toLowerCase() === String(categoryName).trim().toLowerCase());
+      if (match && match.id !== undefined && match.id !== '') {
+        return !isNaN(Number(match.id)) ? Number(match.id) : match.id;
+      }
+    } catch (e) {
+      console.warn('Error resolving categoryId by name:', e);
+    }
+  }
+
+  // 2. Fall back to existing categoryId if set
   if (item.categoryId !== undefined && item.categoryId !== null && item.categoryId !== '') {
     return !isNaN(Number(item.categoryId)) ? Number(item.categoryId) : item.categoryId;
   }
@@ -203,25 +228,6 @@ async function resolveCategoryId(item: MenuItem | any): Promise<number | string>
     return !isNaN(Number(item.category.id)) ? Number(item.category.id) : item.category.id;
   }
 
-  const categoryName = typeof item.category === 'object' ? (item.category.name || '') : (item.category || '');
-  if (!categoryName) return 1;
-
-  try {
-    // 2. Look up from localStorage cache first
-    const localCats = JSON.parse(localStorage.getItem('chef_categories') || '[]');
-    let match = localCats.find((c: any) => String(c.name).trim().toLowerCase() === String(categoryName).trim().toLowerCase());
-    if (match && match.id !== undefined) {
-      return !isNaN(Number(match.id)) ? Number(match.id) : match.id;
-    }
-    // 3. If not found locally, fetch live list from categories API
-    const liveCats = await apiCategories.list();
-    match = liveCats.find((c: any) => String(c.name).trim().toLowerCase() === String(categoryName).trim().toLowerCase());
-    if (match && match.id !== undefined) {
-      return !isNaN(Number(match.id)) ? Number(match.id) : match.id;
-    }
-  } catch (e) {
-    console.warn('Error resolving categoryId:', e);
-  }
   return 1; // fallback ID if category cannot be resolved
 }
 
@@ -301,16 +307,18 @@ export const apiMenuItems = {
 
     // 2. Execute PATCH availability endpoint as requested by user specification
     try {
-      const statusParam = item.availabilityStatus ?? (item.outOfStock ? 'OUT_OF_STOCK' : 'AVAILABLE');
+     const statusParam = item.availabilityStatus ?? (item.outOfStock ? 'OUT_OF_STOCK' : 'AVAILABLE');
       const availRes = await apiRequest<any>(`${settings.menuItemsPath}/${id}/availability?status=${statusParam}`, 'PATCH');
       if (availRes && typeof availRes === 'object') {
         normalized = normalizeMenuItem(availRes);
       } else {
         normalized.outOfStock = item.outOfStock;
+        normalized.availabilityStatus = statusParam;
       }
     } catch (patchErr: any) {
       console.warn(`Note: Availability PATCH check for item ${id}: ${patchErr.message}`);
       normalized.outOfStock = item.outOfStock;
+      normalized.availabilityStatus = item.outOfStock ? 'OUT_OF_STOCK' : 'AVAILABLE';
     }
 
     return normalized;
@@ -326,5 +334,146 @@ export const apiMenuItems = {
   delete: async (id: string): Promise<void> => {
     const settings = getApiSettings();
     return apiRequest<void>(`${settings.menuItemsPath}/${id}`, 'DELETE');
+  }
+};
+
+// Order Normalization Helper
+function normalizeOrder(raw: any): Order {
+  if (!raw) return raw;
+
+  const rawStatus = String(raw.orderStatus || raw.status || 'PLACED').toUpperCase();
+  let appStatus: 'pending' | 'preparing' | 'completed' | 'cancelled' = 'pending';
+  if (rawStatus === 'IN_PROGRESS' || rawStatus === 'PREPARING') {
+    appStatus = 'preparing';
+  } else if (rawStatus === 'COMPLETED' || rawStatus === 'SERVED' || rawStatus === 'READY') {
+    appStatus = 'completed';
+  } else if (rawStatus === 'CANCELLED' || rawStatus === 'CANCELED') {
+    appStatus = 'cancelled';
+  } else {
+    appStatus = 'pending';
+  }
+
+  const rawTable = raw.restaurantTable;
+  const tableNumStr = rawTable?.tableNumber 
+    ? (String(rawTable.tableNumber).toLowerCase().startsWith('t') || String(rawTable.tableNumber).toLowerCase().startsWith('table') ? String(rawTable.tableNumber) : `Table ${rawTable.tableNumber}`)
+    : (raw.tableNumber || `Table 0${raw.restaurantTableId || rawTable?.restaurantTableId || 1}`);
+
+  const rawOrderItems = raw.orderItems || raw.items || [];
+  const items: OrderItem[] = Array.isArray(rawOrderItems) 
+    ? rawOrderItems.map((oi: any, idx: number) => {
+        const mi = oi.menuItem || {};
+        const itemId = String(mi.id || oi.menuItemId || idx);
+        const orderItemId = String(oi.orderItemId || oi.id || `${itemId}-${idx}`);
+        const unitPrice = Number(oi.unitPrice !== undefined ? oi.unitPrice : (oi.price !== undefined ? oi.price : (mi.price || 0)));
+        const qty = Number(oi.quantity || 1);
+        return {
+          id: orderItemId,
+          menuItemId: itemId,
+          name: mi.name || oi.name || 'Menu Item',
+          quantity: qty,
+          price: unitPrice,
+          subtotal: Number(oi.subtotal || (unitPrice * qty)),
+          unitPrice: unitPrice,
+          selectedModifiers: oi.selectedModifiers || []
+        };
+      })
+    : [];
+
+  const idVal = String(raw.orderId !== undefined && raw.orderId !== null ? raw.orderId : (raw.id !== undefined && raw.id !== null ? raw.id : ''));
+  const orderNum = raw.orderNumber || (idVal ? `ORD-${idVal}` : `ORD-${Date.now()}`);
+
+  return {
+    id: idVal || `order-${Date.now()}`,
+    orderId: raw.orderId || raw.id,
+    orderNumber: orderNum,
+    items,
+    total: Number(raw.totalAmount !== undefined ? raw.totalAmount : (raw.subtotal !== undefined ? raw.subtotal : raw.total || 0)),
+    subtotal: Number(raw.subtotal !== undefined ? raw.subtotal : 0),
+    taxAmount: Number(raw.taxAmount !== undefined ? raw.taxAmount : 0),
+    totalAmount: Number(raw.totalAmount !== undefined ? raw.totalAmount : 0),
+    status: appStatus,
+    orderStatus: raw.orderStatus || rawStatus,
+    createdAt: raw.createdAt || new Date().toISOString(),
+    tableNumber: tableNumStr,
+    restaurantTableId: rawTable?.restaurantTableId || raw.restaurantTableId || 1,
+    restaurantTable: rawTable,
+    customerName: raw.customerName || (rawTable?.tableNumber ? `Table ${rawTable.tableNumber}` : 'Guest Customer')
+  };
+}
+
+// Orders REST Methods
+export const apiOrders = {
+  list: async (): Promise<Order[]> => {
+    const settings = getApiSettings();
+    const path = settings.ordersPath || '/api/orders';
+    const list = await apiRequest<any[]>(path, 'GET');
+    return Array.isArray(list) ? list.map(normalizeOrder) : [];
+  },
+
+  listActive: async (): Promise<Order[]> => {
+    const settings = getApiSettings();
+    const basePath = (settings.ordersPath || '/api/orders').replace(/\/$/, '');
+    const list = await apiRequest<any[]>(`${basePath}/active`, 'GET');
+    return Array.isArray(list) ? list.map(normalizeOrder) : [];
+  },
+
+  get: async (id: string): Promise<Order> => {
+    const settings = getApiSettings();
+    const basePath = (settings.ordersPath || '/api/orders').replace(/\/$/, '');
+    const res = await apiRequest<any>(`${basePath}/${id}`, 'GET');
+    return normalizeOrder(res);
+  },
+
+  create: async (orderPayload: { restaurantTableId?: number; tableNumber?: string; items?: OrderItem[]; menuItems?: any[] } | any): Promise<Order> => {
+    const settings = getApiSettings();
+    const path = settings.ordersPath || '/api/orders';
+
+    let tableId = 1;
+    if (orderPayload.restaurantTableId) {
+      tableId = Number(orderPayload.restaurantTableId);
+    } else if (orderPayload.tableNumber) {
+      const match = String(orderPayload.tableNumber).match(/\d+/);
+      if (match) {
+        tableId = parseInt(match[0], 10);
+      }
+    }
+
+    const itemsSource = orderPayload.menuItems || orderPayload.items || [];
+    const payloadMenuItems = itemsSource.map((item: any) => ({
+      menuItemId: !isNaN(Number(item.menuItemId)) 
+        ? Number(item.menuItemId) 
+        : (!isNaN(Number(item.id)) ? Number(item.id) : item.menuItemId || item.id),
+      quantity: Number(item.quantity || 1)
+    }));
+
+    const body = {
+      restaurantTableId: tableId,
+      menuItems: payloadMenuItems
+    };
+
+    const res = await apiRequest<any>(path, 'POST', body);
+    return normalizeOrder(res);
+  },
+
+  updateStatus: async (id: string, newStatus: string): Promise<Order> => {
+    const settings = getApiSettings();
+    const basePath = (settings.ordersPath || '/api/orders').replace(/\/$/, '');
+
+    let orderStatus = 'PLACED';
+    const upper = String(newStatus).toUpperCase();
+    if (upper === 'PREPARING' || upper === 'IN_PROGRESS') {
+      orderStatus = 'IN_PROGRESS';
+    } else if (upper === 'COMPLETED' || upper === 'SERVED') {
+      orderStatus = 'COMPLETED';
+    } else if (upper === 'CANCELLED' || upper === 'CANCELED') {
+      orderStatus = 'CANCELLED';
+    } else if (upper === 'PLACED' || upper === 'PENDING') {
+      orderStatus = 'PLACED';
+    } else {
+      orderStatus = upper; // fallback to verbatim if custom string provided
+    }
+
+    const res = await apiRequest<any>(`${basePath}/${id}/status`, 'PATCH', { orderStatus });
+    return normalizeOrder(res);
   }
 };

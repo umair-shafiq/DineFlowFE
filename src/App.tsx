@@ -17,7 +17,7 @@ import {
   loadData,
   saveData
 } from './data';
-import { SpringBootSettings, getApiSettings, saveApiSettings, apiCategories, apiMenuItems } from './api';
+import { SpringBootSettings, getApiSettings, saveApiSettings, apiCategories, apiMenuItems, apiOrders } from './api';
 
 export default function App() {
   // Navigation & Search State
@@ -44,17 +44,19 @@ export default function App() {
     setIsApiLoading(true);
     setApiStatusMessage(null);
     
-    // Always load local modifiers and orders
+    // Always load local modifiers
     setModifiers(loadData<Modifier[]>('chef_modifiers', INITIAL_MODIFIERS));
-    setOrders(loadData<Order[]>('chef_orders', INITIAL_ORDERS));
 
     if (settingsToUse.enabled) {
       let catSuccess = false;
       let itemsSuccess = false;
+      let ordersSuccess = false;
       let catErrorMsg = '';
       let itemsErrorMsg = '';
+      let ordersErrorMsg = '';
       let loadedCatsCount = 0;
       let loadedItemsCount = 0;
+      let loadedOrdersCount = 0;
 
       // 1. Fetch categories
       try {
@@ -80,25 +82,29 @@ export default function App() {
         setItems(loadData<MenuItem[]>('chef_menu_items', INITIAL_MENU_ITEMS));
       }
 
-      if (catSuccess && itemsSuccess) {
+      // 3. Fetch orders
+      try {
+        const fetchedOrders = await apiOrders.list();
+        setOrders(fetchedOrders);
+        loadedOrdersCount = fetchedOrders.length;
+        ordersSuccess = true;
+      } catch (err: any) {
+        console.warn('Failed to load orders from Spring Boot. Falling back to LocalStorage.', err);
+        ordersErrorMsg = err.message || 'Network error';
+        setOrders(loadData<Order[]>('chef_orders', INITIAL_ORDERS));
+      }
+
+      if (catSuccess && itemsSuccess && ordersSuccess) {
         setApiConnected(true);
         setApiStatusMessage({
           type: 'success',
-          text: `Successfully connected to Spring Boot REST API! Loaded ${loadedCatsCount} categories and ${loadedItemsCount} menu items from the live database.`
+          text: `Successfully connected to Spring Boot REST API! Loaded ${loadedCatsCount} categories, ${loadedItemsCount} menu items, and ${loadedOrdersCount} orders from the live database.`
         });
-      } else if (catSuccess || itemsSuccess) {
+      } else if (catSuccess || itemsSuccess || ordersSuccess) {
         setApiConnected(true);
         setApiStatusMessage({
           type: 'warning',
-          text: `Partially connected! ${
-            catSuccess 
-              ? `Loaded ${loadedCatsCount} categories from Spring Boot.` 
-              : `Categories failed: ${catErrorMsg} (fell back to local storage).`
-          } ${
-            itemsSuccess 
-              ? `Loaded ${loadedItemsCount} menu items from Spring Boot.` 
-              : `Menu items failed: ${itemsErrorMsg} (fell back to local storage).`
-          }`
+          text: `Partially connected! ${catSuccess ? `${loadedCatsCount} categories loaded.` : ''} ${itemsSuccess ? `${loadedItemsCount} items loaded.` : ''} ${ordersSuccess ? `${loadedOrdersCount} orders loaded.` : ''}`
         });
       } else {
         setApiConnected(false);
@@ -112,6 +118,7 @@ export default function App() {
       // Offline mode - Load directly from LocalStorage
       setCategories(loadData<Category[]>('chef_categories', INITIAL_CATEGORIES));
       setItems(loadData<MenuItem[]>('chef_menu_items', INITIAL_MENU_ITEMS));
+      setOrders(loadData<Order[]>('chef_orders', INITIAL_ORDERS));
       setApiConnected(null);
       setIsApiLoading(false);
     }
@@ -286,9 +293,53 @@ export default function App() {
     handleItemsChange(cleanedItems);
   };
 
-  const handleOrdersChange = (updatedOrders: Order[]) => {
-    setOrders(updatedOrders);
-    saveData('chef_orders', updatedOrders);
+  const handleOrdersChange = async (updatedOrders: Order[]) => {
+    if (apiSettings.enabled) {
+      try {
+        const added = updatedOrders.filter(uo => !orders.some(o => o.id === uo.id));
+        const statusChanged = updatedOrders.filter(uo => {
+          const matched = orders.find(o => o.id === uo.id);
+          return matched && matched.status !== uo.status;
+        });
+
+        for (const newOrd of added) {
+          try {
+            const res = await apiOrders.create(newOrd);
+            if (res && res.id) {
+              newOrd.id = String(res.id);
+              newOrd.orderNumber = res.orderNumber || newOrd.orderNumber;
+              newOrd.orderStatus = res.orderStatus || newOrd.orderStatus;
+              newOrd.subtotal = res.subtotal;
+              newOrd.taxAmount = res.taxAmount;
+              newOrd.totalAmount = res.totalAmount;
+            }
+          } catch (createErr: any) {
+            console.warn('Order creation API sync error:', createErr);
+          }
+        }
+
+        for (const statusOrd of statusChanged) {
+          try {
+            const backendStatus = statusOrd.status === 'preparing' ? 'IN_PROGRESS' 
+              : statusOrd.status === 'completed' ? 'COMPLETED' 
+              : statusOrd.status === 'cancelled' ? 'CANCELLED' : 'PLACED';
+            await apiOrders.updateStatus(statusOrd.id, backendStatus);
+          } catch (statusErr: any) {
+            console.warn('Order status PATCH sync error:', statusErr);
+          }
+        }
+
+        setOrders([...updatedOrders]);
+        saveData('chef_orders', updatedOrders);
+      } catch (err: any) {
+        console.error('Failed to sync orders to Spring Boot', err);
+        setOrders(updatedOrders);
+        saveData('chef_orders', updatedOrders);
+      }
+    } else {
+      setOrders(updatedOrders);
+      saveData('chef_orders', updatedOrders);
+    }
   };
 
   // Cascade category edits or deletions down to menu items

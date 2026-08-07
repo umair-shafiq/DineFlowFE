@@ -5,9 +5,9 @@ export interface MenuItem {
   category: string;
   categoryId?: number | string;
   outOfStock: boolean;
+  availabilityStatus?: 'AVAILABLE' | 'OUT_OF_STOCK';
   image: string;
   imageUrl?: string;
-  availabilityStatus?: 'AVAILABLE' | 'OUT_OF_STOCK';
   description: string;
   modifiers?: string[]; // IDs of ModifierGroup or specific Modifier IDs
 }
@@ -35,15 +35,29 @@ export interface OrderItem {
     name: string;
     price: number;
   }[];
+  subtotal?: number;
+  unitPrice?: number;
 }
 
 export interface Order {
   id: string;
+  orderId?: number | string;
   orderNumber: string;
   items: OrderItem[];
   total: number;
+  subtotal?: number;
+  taxAmount?: number;
+  totalAmount?: number;
   status: 'pending' | 'preparing' | 'completed' | 'cancelled';
+  orderStatus?: string;
   createdAt: string;
   tableNumber: string;
+  restaurantTableId?: number;
+  restaurantTable?: {
+    capacity?: number;
+    restaurantTableId?: number;
+    tableNumber?: string;
+    tableStatus?: string;
+  };
   customerName?: string;
 }
