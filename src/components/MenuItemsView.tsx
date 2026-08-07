@@ -132,7 +132,7 @@ export default function MenuItemsView({
             imageUrl: finalImageUrl,
             description: formDescription.trim(),
             outOfStock: formOutOfStock,
-            availabilityStatus: formOutOfStock ? 'OUT_OF_STOCK' : 'AVAILABLE',
+            availabilityStatus: (formOutOfStock ? 'OUT_OF_STOCK' : 'AVAILABLE') as 'OUT_OF_STOCK' | 'AVAILABLE',
             modifiers: formModifiers
           };
         }
@@ -150,7 +150,7 @@ export default function MenuItemsView({
         imageUrl: finalImageUrl,
         description: formDescription.trim(),
         outOfStock: formOutOfStock,
-        availabilityStatus: formOutOfStock ? 'OUT_OF_STOCK' : 'AVAILABLE',
+        availabilityStatus: (formOutOfStock ? 'OUT_OF_STOCK' : 'AVAILABLE') as 'OUT_OF_STOCK' | 'AVAILABLE',
         modifiers: formModifiers
       };
       onItemsChange([...items, newItem]);

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { MenuItem, Modifier, Order, OrderItem } from '../types';
-import { Plus, Minus, Clipboard, ShoppingCart, Check, Play, Ban, Sparkles, User, Hash, X } from 'lucide-react';
+import { Plus, Minus, Clipboard, ShoppingCart, Check, Play, Ban, Sparkles, User, Hash, X, Search, Zap, RefreshCw, Eye, CheckCircle2 } from 'lucide-react';
+import { apiOrders } from '../api';
 
 interface OrdersViewProps {
   orders: Order[];
@@ -28,6 +29,81 @@ export default function OrdersView({
   // Kanban/Terminal Display Tab
   const [displayMode, setDisplayMode] = useState<'board' | 'create'>('board');
   const [activeBoardFilter, setActiveBoardFilter] = useState<'all' | 'pending' | 'preparing' | 'completed' | 'cancelled'>('all');
+
+  // Order Lookup & Active Filter States
+  const [searchOrderId, setSearchOrderId] = useState('');
+  const [searchedOrder, setSearchedOrder] = useState<Order | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [activeEndpointMode, setActiveEndpointMode] = useState<'all' | 'active'>('all');
+  const [isLoadingActive, setIsLoadingActive] = useState(false);
+
+  // Fetch active orders specifically using GET /api/orders/active
+  const handleFetchActiveOrders = async () => {
+    setIsLoadingActive(true);
+    try {
+      const activeList = await apiOrders.listActive();
+      onOrdersChange(activeList);
+      setActiveEndpointMode('active');
+    } catch (err: any) {
+      console.warn('Failed GET /api/orders/active, falling back to local filter:', err);
+      const filtered = orders.filter(o => o.status === 'pending' || o.status === 'preparing');
+      onOrdersChange(filtered);
+      setActiveEndpointMode('active');
+    } finally {
+      setIsLoadingActive(false);
+    }
+  };
+
+  // Fetch all orders specifically using GET /api/orders
+  const handleFetchAllOrders = async () => {
+    setIsLoadingActive(true);
+    try {
+      const allList = await apiOrders.list();
+      onOrdersChange(allList);
+      setActiveEndpointMode('all');
+    } catch (err: any) {
+      console.warn('Failed GET /api/orders:', err);
+      setActiveEndpointMode('all');
+    } finally {
+      setIsLoadingActive(false);
+    }
+  };
+
+  // Search single order by ID using GET /api/orders/{id}
+  const handleSearchOrderById = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const query = searchOrderId.trim();
+    if (!query) return;
+
+    setIsSearching(true);
+    setSearchError(null);
+    setSearchedOrder(null);
+
+    try {
+      const result = await apiOrders.get(query);
+      if (result) {
+        setSearchedOrder(result);
+      } else {
+        setSearchError(`No order found with ID "${query}".`);
+      }
+    } catch (err: any) {
+      // Fallback search locally in loaded state
+      const match = orders.find(o => 
+        String(o.id) === query || 
+        String(o.orderId) === query || 
+        String(o.orderNumber).toLowerCase() === query.toLowerCase() ||
+        String(o.orderNumber).toLowerCase() === `ord-${query}`.toLowerCase()
+      );
+      if (match) {
+        setSearchedOrder(match);
+      } else {
+        setSearchError(`Order ID "${query}" not found (${err.message || '404 Not Found'}).`);
+      }
+    } finally {
+      setIsSearching(false);
+    }
+  };
 
   // Find linked modifiers for a menu item
   const getLinkedModifiers = (item: MenuItem): Modifier[] => {
@@ -203,6 +279,149 @@ export default function OrdersView({
       {/* DISPLAY MODE 1: KITCHEN ORDER TRACKING BOARD */}
       {displayMode === 'board' && (
         <div className="space-y-6">
+          
+          {/* Kitchen Queue Control Toolbar */}
+          <div className="bg-white border border-border-subtle rounded-xl p-4 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            {/* Queue Mode Toggles */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-sans font-bold text-text-secondary uppercase tracking-wider mr-1">View Mode:</span>
+              <button
+                type="button"
+                onClick={handleFetchActiveOrders}
+                disabled={isLoadingActive}
+                className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
+                  activeEndpointMode === 'active'
+                    ? 'bg-brand-secondary text-white shadow-sm'
+                    : 'bg-surf-low hover:bg-surf-container border border-border-subtle text-text-secondary'
+                }`}
+              >
+                {isLoadingActive && activeEndpointMode === 'active' ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+                <span>Active Kitchen Queue</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleFetchAllOrders}
+                disabled={isLoadingActive}
+                className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
+                  activeEndpointMode === 'all'
+                    ? 'bg-brand-primary text-white shadow-sm'
+                    : 'bg-surf-low hover:bg-surf-container border border-border-subtle text-text-secondary'
+                }`}
+              >
+                {isLoadingActive && activeEndpointMode === 'all' ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Clipboard className="w-3.5 h-3.5" />}
+                <span>All Orders History</span>
+              </button>
+            </div>
+
+            {/* Ticket Lookup */}
+            <form onSubmit={handleSearchOrderById} className="flex items-center gap-2">
+              <div className="relative flex-1 sm:w-64">
+                <Search className="w-3.5 h-3.5 text-text-secondary absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchOrderId}
+                  onChange={(e) => setSearchOrderId(e.target.value)}
+                  placeholder="Order # or ID (e.g. 1001 or 1)..."
+                  className="w-full bg-surf-low border border-border-subtle rounded-lg pl-8 pr-3 py-1.5 text-xs focus:ring-1 focus:ring-brand-secondary outline-none text-text-primary"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={isSearching || !searchOrderId.trim()}
+                className="bg-brand-primary text-white font-bold text-xs px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 hover:bg-brand-primary/90 transition-colors disabled:opacity-50 active-scale"
+              >
+                {isSearching ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Eye className="w-3.5 h-3.5" />}
+                <span>Find Ticket</span>
+              </button>
+            </form>
+          </div>
+
+          {/* Search Result Modal / Error Callout */}
+          {searchError && (
+            <div className="bg-brand-accent-red/10 border border-brand-accent-red/25 rounded-xl p-4 text-brand-accent-red text-xs flex items-center justify-between">
+              <div className="flex items-center gap-2 font-medium">
+                <Ban className="w-4 h-4 shrink-0" />
+                <span>{searchError}</span>
+              </div>
+              <button onClick={() => setSearchError(null)} className="p-1 hover:bg-brand-accent-red/10 rounded">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {searchedOrder && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+              <div className="bg-white border border-border-subtle rounded-2xl p-6 max-w-lg w-full shadow-2xl space-y-4">
+                <div className="flex items-center justify-between border-b border-border-subtle pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <span className="bg-brand-secondary/10 text-brand-secondary p-2 rounded-xl">
+                      <Clipboard className="w-5 h-5" />
+                    </span>
+                    <div>
+                      <h3 className="font-display font-bold text-base text-brand-primary">
+                        Order #{searchedOrder.orderNumber || searchedOrder.id}
+                      </h3>
+                      <p className="text-text-secondary text-xs">{searchedOrder.customerName || searchedOrder.tableNumber}</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setSearchedOrder(null)} className="text-text-secondary hover:text-brand-primary p-1 rounded-lg">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-3 text-xs">
+                  <div className="grid grid-cols-2 gap-2 bg-surf-low p-3 rounded-xl border border-border-subtle font-sans">
+                    <div><span className="text-text-secondary">Order ID:</span> <strong className="text-brand-primary font-mono ml-1">{searchedOrder.orderId || searchedOrder.id}</strong></div>
+                    <div><span className="text-text-secondary">Table:</span> <strong className="text-brand-primary font-mono ml-1">{searchedOrder.tableNumber}</strong></div>
+                    <div><span className="text-text-secondary">Status:</span> <strong className="text-brand-secondary uppercase ml-1">{searchedOrder.status}</strong></div>
+                    <div><span className="text-text-secondary">Placed:</span> <strong className="text-brand-primary ml-1">{new Date(searchedOrder.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong></div>
+                  </div>
+
+                  <div>
+                    <h4 className="font-bold text-text-primary mb-1.5">Order Items ({searchedOrder.items.length}):</h4>
+                    <div className="bg-surf-low p-3 rounded-xl space-y-2 border border-border-subtle max-h-48 overflow-y-auto">
+                      {searchedOrder.items.map((item, idx) => (
+                        <div key={idx} className="flex justify-between items-center text-xs">
+                          <span className="font-medium text-text-primary">{item.quantity}x {item.name}</span>
+                          <span className="font-mono font-bold text-brand-primary">${(item.price * item.quantity).toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="border-t border-border-subtle pt-2 space-y-1 text-xs">
+                    {searchedOrder.subtotal !== undefined && searchedOrder.subtotal > 0 && (
+                      <div className="flex justify-between text-text-secondary">
+                        <span>Subtotal:</span>
+                        <span className="font-mono">${searchedOrder.subtotal.toFixed(2)}</span>
+                      </div>
+                    )}
+                    {searchedOrder.taxAmount !== undefined && searchedOrder.taxAmount > 0 && (
+                      <div className="flex justify-between text-text-secondary">
+                        <span>Tax Amount:</span>
+                        <span className="font-mono">${searchedOrder.taxAmount.toFixed(2)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between font-bold text-sm text-brand-primary pt-1.5 border-t border-border-subtle">
+                      <span>Total Amount:</span>
+                      <span className="text-brand-secondary font-mono">${(searchedOrder.totalAmount || searchedOrder.total).toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    onClick={() => setSearchedOrder(null)}
+                    className="w-full bg-brand-primary text-white font-bold h-10 rounded-xl hover:bg-brand-primary/90 transition-colors shadow-sm"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Status filters */}
           <div className="flex gap-2 overflow-x-auto no-scrollbar border-b border-border-subtle pb-3">
             {[
