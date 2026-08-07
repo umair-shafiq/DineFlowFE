@@ -40,16 +40,15 @@ export default function OrdersView({
 
   // Fetch active orders specifically using GET /api/orders/active
   const handleFetchActiveOrders = async () => {
+    setActiveEndpointMode('active');
     setIsLoadingActive(true);
     try {
       const activeList = await apiOrders.listActive();
-      onOrdersChange(activeList);
-      setActiveEndpointMode('active');
+      if (Array.isArray(activeList) && activeList.length > 0) {
+        onOrdersChange(activeList);
+      }
     } catch (err: any) {
-      console.warn('Failed GET /api/orders/active, falling back to local filter:', err);
-      const filtered = orders.filter(o => o.status === 'pending' || o.status === 'preparing');
-      onOrdersChange(filtered);
-      setActiveEndpointMode('active');
+      console.warn('Failed GET /api/orders/active, using local active filter:', err);
     } finally {
       setIsLoadingActive(false);
     }
@@ -57,14 +56,15 @@ export default function OrdersView({
 
   // Fetch all orders specifically using GET /api/orders
   const handleFetchAllOrders = async () => {
+    setActiveEndpointMode('all');
     setIsLoadingActive(true);
     try {
       const allList = await apiOrders.list();
-      onOrdersChange(allList);
-      setActiveEndpointMode('all');
+      if (Array.isArray(allList) && allList.length > 0) {
+        onOrdersChange(allList);
+      }
     } catch (err: any) {
-      console.warn('Failed GET /api/orders:', err);
-      setActiveEndpointMode('all');
+      console.warn('Failed GET /api/orders, using local filter:', err);
     } finally {
       setIsLoadingActive(false);
     }
@@ -232,6 +232,10 @@ export default function OrdersView({
 
   // Filters daily orders
   const filteredOrders = orders.filter(ord => {
+    if (activeEndpointMode === 'active') {
+      const isActive = ord.status === 'pending' || ord.status === 'preparing';
+      if (!isActive) return false;
+    }
     if (activeBoardFilter === 'all') return true;
     return ord.status === activeBoardFilter;
   });

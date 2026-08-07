@@ -296,9 +296,14 @@ export default function App() {
   const handleOrdersChange = async (updatedOrders: Order[]) => {
     if (apiSettings.enabled) {
       try {
-        const added = updatedOrders.filter(uo => !orders.some(o => o.id === uo.id));
+        const isMatch = (a: Order, b: Order) => 
+          String(a.id) === String(b.id) || 
+          (a.orderId !== undefined && b.orderId !== undefined && String(a.orderId) === String(b.orderId)) ||
+          (a.orderNumber && b.orderNumber && String(a.orderNumber).toLowerCase() === String(b.orderNumber).toLowerCase());
+
+        const added = updatedOrders.filter(uo => !orders.some(o => isMatch(o, uo)));
         const statusChanged = updatedOrders.filter(uo => {
-          const matched = orders.find(o => o.id === uo.id);
+          const matched = orders.find(o => isMatch(o, uo));
           return matched && matched.status !== uo.status;
         });
 
@@ -307,6 +312,7 @@ export default function App() {
             const res = await apiOrders.create(newOrd);
             if (res && res.id) {
               newOrd.id = String(res.id);
+              newOrd.orderId = res.orderId || res.id;
               newOrd.orderNumber = res.orderNumber || newOrd.orderNumber;
               newOrd.orderStatus = res.orderStatus || newOrd.orderStatus;
               newOrd.subtotal = res.subtotal;
@@ -329,8 +335,19 @@ export default function App() {
           }
         }
 
-        setOrders([...updatedOrders]);
-        saveData('chef_orders', updatedOrders);
+        // Merge updatedOrders into orders without dropping unreferenced historical items
+        const merged = [...orders];
+        for (const uo of updatedOrders) {
+          const idx = merged.findIndex(o => isMatch(o, uo));
+          if (idx !== -1) {
+            merged[idx] = { ...merged[idx], ...uo };
+          } else {
+            merged.unshift(uo);
+          }
+        }
+
+        setOrders(merged);
+        saveData('chef_orders', merged);
       } catch (err: any) {
         console.error('Failed to sync orders to Spring Boot', err);
         setOrders(updatedOrders);
