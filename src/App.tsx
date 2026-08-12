@@ -315,9 +315,12 @@ export default function App() {
               newOrd.orderId = res.orderId || res.id;
               newOrd.orderNumber = res.orderNumber || newOrd.orderNumber;
               newOrd.orderStatus = res.orderStatus || newOrd.orderStatus;
+              newOrd.orderType = res.orderType || newOrd.orderType;
               newOrd.subtotal = res.subtotal;
               newOrd.taxAmount = res.taxAmount;
               newOrd.totalAmount = res.totalAmount;
+              newOrd.restaurantTable = res.restaurantTable;
+              if (res.tableNumber) newOrd.tableNumber = res.tableNumber;
             }
           } catch (createErr: any) {
             console.warn('Order creation API sync error:', createErr);

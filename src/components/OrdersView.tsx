@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { MenuItem, Modifier, Order, OrderItem } from '../types';
-import { Plus, Minus, Clipboard, ShoppingCart, Check, Play, Ban, Sparkles, User, Hash, X, Search, Zap, RefreshCw, Eye, CheckCircle2 } from 'lucide-react';
+import { Plus, Minus, Clipboard, ShoppingCart, Check, Play, Ban, Sparkles, User, Hash, X, Search, Zap, RefreshCw, Eye, CheckCircle2, Utensils, ShoppingBag } from 'lucide-react';
 import { apiOrders } from '../api';
 
 interface OrdersViewProps {
@@ -19,6 +19,7 @@ export default function OrdersView({
   
   // Terminal Cart State
   const [cart, setCart] = useState<OrderItem[]>([]);
+  const [selectedOrderType, setSelectedOrderType] = useState<'DINE_IN' | 'TAKEAWAY'>('DINE_IN');
   const [tableNumber, setTableNumber] = useState('Table 01');
   const [customerName, setCustomerName] = useState('');
   
@@ -205,7 +206,9 @@ export default function OrdersView({
     e.preventDefault();
     if (cart.length === 0) return;
 
-    const tableIdNum = parseInt(tableNumber.replace(/\D/g, '')) || 2;
+    const isDineIn = selectedOrderType === 'DINE_IN';
+    const tableIdNum = isDineIn ? (parseInt(tableNumber.replace(/\D/g, '')) || 2) : undefined;
+    const tableStr = isDineIn ? (tableNumber.trim() || `Table 0${tableIdNum}`) : 'Takeaway';
 
     const newOrder: Order = {
       id: 'order-' + Date.now(),
@@ -214,16 +217,18 @@ export default function OrdersView({
       total: cartTotal,
       status: 'pending',
       orderStatus: 'PLACED',
+      orderType: selectedOrderType,
       createdAt: new Date().toISOString(),
-      tableNumber: tableNumber.trim() || `Table 0${tableIdNum}`,
+      tableNumber: tableStr,
       restaurantTableId: tableIdNum,
-      customerName: customerName.trim() || `Table 0${tableIdNum}`
+      customerName: customerName.trim() || (isDineIn ? tableStr : 'Takeaway Customer')
     };
 
     onOrdersChange([newOrder, ...orders]);
     setCart([]);
     setCustomerName('');
     setTableNumber('Table 02');
+    setSelectedOrderType('DINE_IN');
     setDisplayMode('board'); // Return to daily order board
   };
 
@@ -385,9 +390,10 @@ export default function OrdersView({
                 <div className="space-y-3 text-xs">
                   <div className="grid grid-cols-2 gap-2 bg-surf-low p-3 rounded-xl border border-border-subtle font-sans">
                     <div><span className="text-text-secondary">Ticket #:</span> <strong className="text-brand-primary font-mono ml-1">{searchedOrder.orderNumber || searchedOrder.orderId || searchedOrder.id}</strong></div>
+                    <div><span className="text-text-secondary">Order Type:</span> <strong className="text-brand-primary font-mono ml-1 uppercase">{searchedOrder.orderType || (searchedOrder.restaurantTableId ? 'DINE_IN' : 'TAKEAWAY')}</strong></div>
                     <div><span className="text-text-secondary">Table:</span> <strong className="text-brand-primary font-mono ml-1">{searchedOrder.tableNumber}</strong></div>
                     <div><span className="text-text-secondary">Status:</span> <strong className="text-brand-secondary uppercase ml-1">{searchedOrder.status}</strong></div>
-                    <div><span className="text-text-secondary">Placed:</span> <strong className="text-brand-primary ml-1">{new Date(searchedOrder.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong></div>
+                    <div className="col-span-2"><span className="text-text-secondary">Placed:</span> <strong className="text-brand-primary ml-1">{new Date(searchedOrder.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong></div>
                   </div>
 
                   <div>
@@ -495,9 +501,18 @@ export default function OrdersView({
                   {/* Card Ticket Header */}
                   <div className="px-5 py-3 border-b border-border-subtle/50 flex justify-between items-center bg-white/70">
                     <div>
-                      <p className="font-mono text-xs font-bold text-text-secondary">
-                        TICKET #{order.orderNumber}
-                      </p>
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <p className="font-mono text-xs font-bold text-text-secondary">
+                          TICKET #{order.orderNumber}
+                        </p>
+                        <span className={`font-mono text-[9px] font-bold px-1.5 py-0.2 rounded uppercase ${
+                          order.orderType === 'TAKEAWAY' || (!order.restaurantTableId && order.tableNumber === 'Takeaway')
+                            ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                            : 'bg-indigo-100 text-indigo-800 border border-indigo-200'
+                        }`}>
+                          {order.orderType || (order.restaurantTableId ? 'DINE_IN' : 'TAKEAWAY')}
+                        </span>
+                      </div>
                       <h4 className="font-display font-bold text-brand-primary text-sm flex items-center gap-1.5">
                         <span className="text-brand-secondary">{order.tableNumber}</span>
                         {order.customerName && (
@@ -732,23 +747,58 @@ export default function OrdersView({
                 </div>
 
                 {/* Info Fields */}
-                <div className="border-t border-border-subtle/50 pt-4 space-y-3">
-                  <div className="grid grid-cols-2 gap-4">
-                    {/* Table Input */}
-                    <div className="space-y-1">
-                      <label className="font-mono text-[10px] font-bold text-text-secondary uppercase tracking-wider flex items-center gap-1">
-                        <Hash className="w-3.5 h-3.5" />
-                        <span>Table #</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={tableNumber}
-                        onChange={(e) => setTableNumber(e.target.value)}
-                        className="w-full bg-surf-low border border-border-subtle rounded-lg p-2.5 text-xs focus:ring-1 focus:ring-brand-secondary outline-none font-sans"
-                        placeholder="e.g. Table 04, Bar 02"
-                      />
+                <div className="border-t border-border-subtle/50 pt-4 space-y-3.5">
+                  {/* Order Type Toggle */}
+                  <div className="space-y-1">
+                    <label className="font-mono text-[10px] font-bold text-text-secondary uppercase tracking-wider block">
+                      Order Type
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedOrderType('DINE_IN')}
+                        className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 border transition-all ${
+                          selectedOrderType === 'DINE_IN'
+                            ? 'bg-brand-primary text-white border-brand-primary shadow-xs'
+                            : 'bg-surf-low text-text-secondary border-border-subtle hover:bg-surf-container'
+                        }`}
+                      >
+                        <Utensils className="w-3.5 h-3.5" />
+                        <span>DINE IN</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedOrderType('TAKEAWAY')}
+                        className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 border transition-all ${
+                          selectedOrderType === 'TAKEAWAY'
+                            ? 'bg-brand-secondary text-white border-brand-secondary shadow-xs'
+                            : 'bg-surf-low text-text-secondary border-border-subtle hover:bg-surf-container'
+                        }`}
+                      >
+                        <ShoppingBag className="w-3.5 h-3.5" />
+                        <span>TAKEAWAY</span>
+                      </button>
                     </div>
+                  </div>
+
+                  <div className={`grid ${selectedOrderType === 'DINE_IN' ? 'grid-cols-2' : 'grid-cols-1'} gap-3`}>
+                    {/* Table Input (Only shown for DINE_IN) */}
+                    {selectedOrderType === 'DINE_IN' && (
+                      <div className="space-y-1">
+                        <label className="font-mono text-[10px] font-bold text-text-secondary uppercase tracking-wider flex items-center gap-1">
+                          <Hash className="w-3.5 h-3.5" />
+                          <span>Table #</span>
+                        </label>
+                        <input
+                          type="text"
+                          required={selectedOrderType === 'DINE_IN'}
+                          value={tableNumber}
+                          onChange={(e) => setTableNumber(e.target.value)}
+                          className="w-full bg-surf-low border border-border-subtle rounded-lg p-2 text-xs focus:ring-1 focus:ring-brand-secondary outline-none font-sans"
+                          placeholder="e.g. Table 02"
+                        />
+                      </div>
+                    )}
 
                     {/* Guest Name */}
                     <div className="space-y-1">
@@ -760,8 +810,8 @@ export default function OrdersView({
                         type="text"
                         value={customerName}
                         onChange={(e) => setCustomerName(e.target.value)}
-                        className="w-full bg-surf-low border border-border-subtle rounded-lg p-2.5 text-xs focus:ring-1 focus:ring-brand-secondary outline-none font-sans"
-                        placeholder="e.g. Socrates"
+                        className="w-full bg-surf-low border border-border-subtle rounded-lg p-2 text-xs focus:ring-1 focus:ring-brand-secondary outline-none font-sans"
+                        placeholder={selectedOrderType === 'TAKEAWAY' ? "e.g. Customer Name" : "e.g. Socrates"}
                       />
                     </div>
                   </div>

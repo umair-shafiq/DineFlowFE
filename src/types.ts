@@ -50,6 +50,7 @@ export interface Order {
   totalAmount?: number;
   status: 'pending' | 'preparing' | 'completed' | 'cancelled';
   orderStatus?: string;
+  orderType?: 'DINE_IN' | 'TAKEAWAY';
   createdAt: string;
   tableNumber: string;
   restaurantTableId?: number;

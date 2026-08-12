@@ -353,10 +353,18 @@ function normalizeOrder(raw: any): Order {
     appStatus = 'pending';
   }
 
+  const rawOrderType = raw.orderType ? String(raw.orderType).toUpperCase() : (raw.restaurantTable || raw.restaurantTableId ? 'DINE_IN' : 'TAKEAWAY');
+  const orderTypeVal: 'DINE_IN' | 'TAKEAWAY' = rawOrderType === 'TAKEAWAY' ? 'TAKEAWAY' : 'DINE_IN';
+
   const rawTable = raw.restaurantTable;
-  const tableNumStr = rawTable?.tableNumber 
-    ? (String(rawTable.tableNumber).toLowerCase().startsWith('t') || String(rawTable.tableNumber).toLowerCase().startsWith('table') ? String(rawTable.tableNumber) : `Table ${rawTable.tableNumber}`)
-    : (raw.tableNumber || `Table 0${raw.restaurantTableId || rawTable?.restaurantTableId || 1}`);
+  let tableNumStr = 'Takeaway';
+  if (orderTypeVal === 'DINE_IN') {
+    tableNumStr = rawTable?.tableNumber 
+      ? (String(rawTable.tableNumber).toLowerCase().startsWith('t') || String(rawTable.tableNumber).toLowerCase().startsWith('table') ? String(rawTable.tableNumber) : `Table ${rawTable.tableNumber}`)
+      : (raw.tableNumber || `Table 0${raw.restaurantTableId || rawTable?.restaurantTableId || 1}`);
+  } else if (raw.tableNumber && raw.tableNumber !== 'Takeaway') {
+    tableNumStr = raw.tableNumber;
+  }
 
   const rawOrderItems = raw.orderItems || raw.items || [];
   const items: OrderItem[] = Array.isArray(rawOrderItems) 
@@ -393,11 +401,12 @@ function normalizeOrder(raw: any): Order {
     totalAmount: Number(raw.totalAmount !== undefined ? raw.totalAmount : 0),
     status: appStatus,
     orderStatus: raw.orderStatus || rawStatus,
+    orderType: orderTypeVal,
     createdAt: raw.createdAt || new Date().toISOString(),
     tableNumber: tableNumStr,
-    restaurantTableId: rawTable?.restaurantTableId || raw.restaurantTableId || 1,
+    restaurantTableId: rawTable?.restaurantTableId || raw.restaurantTableId || undefined,
     restaurantTable: rawTable,
-    customerName: raw.customerName || (rawTable?.tableNumber ? `Table ${rawTable.tableNumber}` : 'Guest Customer')
+    customerName: raw.customerName || (orderTypeVal === 'TAKEAWAY' ? 'Takeaway Customer' : (rawTable?.tableNumber ? `Table ${rawTable.tableNumber}` : 'Guest Customer'))
   };
 }
 
@@ -424,19 +433,11 @@ export const apiOrders = {
     return normalizeOrder(res);
   },
 
-  create: async (orderPayload: { restaurantTableId?: number; tableNumber?: string; items?: OrderItem[]; menuItems?: any[] } | any): Promise<Order> => {
+  create: async (orderPayload: { orderType?: 'DINE_IN' | 'TAKEAWAY'; restaurantTableId?: number; tableNumber?: string; items?: OrderItem[]; menuItems?: any[] } | any): Promise<Order> => {
     const settings = getApiSettings();
     const path = settings.ordersPath || '/api/orders';
 
-    let tableId = 1;
-    if (orderPayload.restaurantTableId) {
-      tableId = Number(orderPayload.restaurantTableId);
-    } else if (orderPayload.tableNumber) {
-      const match = String(orderPayload.tableNumber).match(/\d+/);
-      if (match) {
-        tableId = parseInt(match[0], 10);
-      }
-    }
+    const orderType = (orderPayload.orderType || (orderPayload.restaurantTableId ? 'DINE_IN' : 'TAKEAWAY')).toUpperCase();
 
     const itemsSource = orderPayload.menuItems || orderPayload.items || [];
     const payloadMenuItems = itemsSource.map((item: any) => ({
@@ -446,10 +447,23 @@ export const apiOrders = {
       quantity: Number(item.quantity || 1)
     }));
 
-    const body = {
-      restaurantTableId: tableId,
-      menuItems: payloadMenuItems
+    const body: any = {
+      menuItems: payloadMenuItems,
+      orderType: orderType
     };
+
+    if (orderType === 'DINE_IN') {
+      let tableId = 1;
+      if (orderPayload.restaurantTableId) {
+        tableId = Number(orderPayload.restaurantTableId);
+      } else if (orderPayload.tableNumber) {
+        const match = String(orderPayload.tableNumber).match(/\d+/);
+        if (match) {
+          tableId = parseInt(match[0], 10);
+        }
+      }
+      body.restaurantTableId = tableId;
+    }
 
     const res = await apiRequest<any>(path, 'POST', body);
     return normalizeOrder(res);
