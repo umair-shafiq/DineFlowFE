@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { MenuItem, Modifier, Order, OrderItem } from '../types';
-import { Plus, Minus, Clipboard, ShoppingCart, Check, Play, Ban, Sparkles, User, Hash, X, Search, Zap, RefreshCw, Eye, CheckCircle2, Utensils, ShoppingBag } from 'lucide-react';
+import { MenuItem, Modifier, Order, OrderItem, UserRole } from '../types';
+import { Plus, Minus, Clipboard, ShoppingCart, Check, Play, Ban, Sparkles, User, Hash, X, Search, Zap, RefreshCw, Eye, CheckCircle2, Utensils, ShoppingBag, Shield, UserCheck } from 'lucide-react';
 import { apiOrders } from '../api';
 
 interface OrdersViewProps {
@@ -8,15 +8,18 @@ interface OrdersViewProps {
   items: MenuItem[];
   modifiers: Modifier[];
   onOrdersChange: (updatedOrders: Order[]) => void;
+  userRole?: UserRole;
 }
 
 export default function OrdersView({
   orders,
   items,
   modifiers,
-  onOrdersChange
+  onOrdersChange,
+  userRole = 'ADMIN'
 }: OrdersViewProps) {
-  
+  const isWaiter = userRole === 'WAITER';
+
   // Terminal Cart State
   const [cart, setCart] = useState<OrderItem[]>([]);
   const [selectedOrderType, setSelectedOrderType] = useState<'DINE_IN' | 'TAKEAWAY'>('DINE_IN');
@@ -27,7 +30,7 @@ export default function OrdersView({
   const [activeCustomizingItem, setActiveCustomizingItem] = useState<MenuItem | null>(null);
   const [selectedModifiersForActiveItem, setSelectedModifiersForActiveItem] = useState<Modifier[]>([]);
   
-  // Kanban/Terminal Display Tab
+  // Kanban/Terminal Display Tab (locked to 'board' for WAITER)
   const [displayMode, setDisplayMode] = useState<'board' | 'create'>('board');
   const [activeBoardFilter, setActiveBoardFilter] = useState<'all' | 'pending' | 'preparing' | 'completed' | 'cancelled'>('all');
 
@@ -259,38 +262,54 @@ export default function OrdersView({
       {/* View Selector Controls */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div>
-          <h1 className="font-display font-semibold text-[32px] text-brand-primary leading-tight mb-1">
-            Kitchen Orders & Terminal
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="font-display font-semibold text-[32px] text-brand-primary leading-tight mb-1">
+              {isWaiter ? 'Live Orders Queue' : 'Kitchen Orders & Terminal'}
+            </h1>
+            {isWaiter && (
+              <span className="px-2.5 py-0.5 bg-amber-50 border border-amber-200 text-amber-800 rounded-full font-mono text-[10px] font-bold uppercase">
+                Waiter (View Only)
+              </span>
+            )}
+          </div>
           <p className="text-text-secondary text-sm font-medium">
-            Track daily incoming tickets, advance preparation steps, or place mock dining orders.
+            {isWaiter 
+              ? 'Real-time live queue monitoring. Browse active kitchen tickets and inspect order details.'
+              : 'Track daily incoming tickets, advance preparation steps, or place dining orders.'}
           </p>
         </div>
 
         {/* Board vs Create Terminal Switcher */}
-        <div className="flex bg-surf-container p-1 rounded-lg w-fit shadow-inner">
-          <button
-            onClick={() => setDisplayMode('board')}
-            className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${
-              displayMode === 'board'
-                ? 'bg-white text-brand-secondary shadow-sm font-extrabold'
-                : 'text-text-secondary hover:text-brand-primary'
-            }`}
-          >
-            Daily Order Board ({orders.filter(o => o.status !== 'completed' && o.status !== 'cancelled').length} Active)
-          </button>
-          <button
-            onClick={() => setDisplayMode('create')}
-            className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
-              displayMode === 'create'
-                ? 'bg-white text-brand-secondary shadow-sm font-extrabold'
-                : 'text-text-secondary hover:text-brand-primary'
-            }`}
-          >
-            <ShoppingCart className="w-3.5 h-3.5" />
-            <span>New Order Terminal</span>
-          </button>
-        </div>
+        {!isWaiter ? (
+          <div className="flex bg-surf-container p-1 rounded-lg w-fit shadow-inner">
+            <button
+              onClick={() => setDisplayMode('board')}
+              className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${
+                displayMode === 'board'
+                  ? 'bg-white text-brand-secondary shadow-sm font-extrabold'
+                  : 'text-text-secondary hover:text-brand-primary'
+              }`}
+            >
+              Daily Order Board ({orders.filter(o => o.status !== 'completed' && o.status !== 'cancelled').length} Active)
+            </button>
+            <button
+              onClick={() => setDisplayMode('create')}
+              className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${
+                displayMode === 'create'
+                  ? 'bg-white text-brand-secondary shadow-sm font-extrabold'
+                  : 'text-text-secondary hover:text-brand-primary'
+              }`}
+            >
+              <ShoppingCart className="w-3.5 h-3.5" />
+              <span>New Order Terminal</span>
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 bg-amber-50/60 border border-amber-200/60 px-3.5 py-1.5 rounded-xl text-xs font-medium text-amber-900 font-mono">
+            <UserCheck className="w-3.5 h-3.5 text-amber-700" />
+            <span>Read-Only Orders Queue</span>
+          </div>
+        )}
       </div>
 
       {/* DISPLAY MODE 1: KITCHEN ORDER TRACKING BOARD */}
@@ -578,47 +597,63 @@ export default function OrdersView({
 
                   {/* Actions Bar */}
                   <div className="px-5 py-3 bg-white border-t border-border-subtle/50 flex gap-2">
-                    {order.status === 'pending' && (
+                    {isWaiter ? (
+                      <button
+                        onClick={() => setSearchedOrder(order)}
+                        className="w-full bg-surf-container hover:bg-surf-high border border-border-subtle text-brand-primary font-bold py-2 rounded-lg text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-brand-secondary" />
+                        <span>Inspect Ticket Details</span>
+                      </button>
+                    ) : (
                       <>
-                        <button
-                          onClick={() => handleAdvanceStatus(order.id, 'preparing')}
-                          className="flex-1 bg-brand-secondary text-white font-bold py-2 rounded-lg text-xs flex items-center justify-center gap-1.5 hover:bg-brand-secondary-hover transition-colors active-scale"
-                        >
-                          <Play className="w-3.5 h-3.5" />
-                          <span>Start Cooking</span>
-                        </button>
-                        <button
-                          onClick={() => handleAdvanceStatus(order.id, 'cancelled')}
-                          className="px-3 py-2 bg-brand-accent-red/5 text-brand-accent-red rounded-lg text-xs hover:bg-brand-accent-red/10 transition-colors active-scale"
-                          title="Cancel Order"
-                        >
-                          <Ban className="w-3.5 h-3.5" />
-                        </button>
-                      </>
-                    )}
+                        {order.status === 'pending' && (
+                          <>
+                            <button
+                              onClick={() => handleAdvanceStatus(order.id, 'preparing')}
+                              className="flex-1 bg-brand-secondary text-white font-bold py-2 rounded-lg text-xs flex items-center justify-center gap-1.5 hover:bg-brand-secondary-hover transition-colors active-scale cursor-pointer"
+                            >
+                              <Play className="w-3.5 h-3.5" />
+                              <span>Start Cooking</span>
+                            </button>
+                            <button
+                              onClick={() => handleAdvanceStatus(order.id, 'cancelled')}
+                              className="px-3 py-2 bg-brand-accent-red/5 text-brand-accent-red rounded-lg text-xs hover:bg-brand-accent-red/10 transition-colors active-scale cursor-pointer"
+                              title="Cancel Order"
+                            >
+                              <Ban className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        )}
 
-                    {order.status === 'preparing' && (
-                      <>
-                        <button
-                          onClick={() => handleAdvanceStatus(order.id, 'completed')}
-                          className="flex-1 bg-brand-accent-green text-white font-bold py-2 rounded-lg text-xs flex items-center justify-center gap-1.5 hover:bg-brand-accent-green/90 transition-colors active-scale"
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Complete Ticket</span>
-                        </button>
-                        <button
-                          onClick={() => handleAdvanceStatus(order.id, 'cancelled')}
-                          className="px-3 py-2 bg-brand-accent-red/5 text-brand-accent-red rounded-lg text-xs hover:bg-brand-accent-red/10 transition-colors active-scale"
-                        >
-                          <Ban className="w-3.5 h-3.5" />
-                        </button>
-                      </>
-                    )}
+                        {order.status === 'preparing' && (
+                          <>
+                            <button
+                              onClick={() => handleAdvanceStatus(order.id, 'completed')}
+                              className="flex-1 bg-brand-accent-green text-white font-bold py-2 rounded-lg text-xs flex items-center justify-center gap-1.5 hover:bg-brand-accent-green/90 transition-colors active-scale cursor-pointer"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Complete Ticket</span>
+                            </button>
+                            <button
+                              onClick={() => handleAdvanceStatus(order.id, 'cancelled')}
+                              className="px-3 py-2 bg-brand-accent-red/5 text-brand-accent-red rounded-lg text-xs hover:bg-brand-accent-red/10 transition-colors active-scale cursor-pointer"
+                            >
+                              <Ban className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        )}
 
-                    {(order.status === 'completed' || order.status === 'cancelled') && (
-                      <span className="text-center w-full text-xs font-bold text-text-secondary/60 py-1.5 select-none">
-                        Ticket Closed
-                      </span>
+                        {(order.status === 'completed' || order.status === 'cancelled') && (
+                          <button
+                            onClick={() => setSearchedOrder(order)}
+                            className="text-center w-full text-xs font-bold text-text-secondary hover:text-brand-primary py-1.5 flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>View Ticket Summary</span>
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>

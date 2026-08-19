@@ -62,3 +62,24 @@ export interface Order {
   };
   customerName?: string;
 }
+
+export type UserRole = 'ADMIN' | 'WAITER';
+
+export interface User {
+  userId: number;
+  id?: string;
+  fullName: string;
+  email: string;
+  userRole: UserRole;
+  userStatus: boolean;
+  createdAt?: string;
+  password?: string;
+}
+
+export interface AuthUser {
+  token: string;
+  email: string;
+  userRole: UserRole;
+  fullName?: string;
+  userId?: number;
+}

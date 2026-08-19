@@ -1,6 +1,6 @@
 {
-  "name": "ChefCommand",
-  "description": "Professional kitchen menu management, real-time stock control, and interactive order terminal.",
+  "name": "DineFlow",
+  "description": "Professional restaurant POS and kitchen management system with role-based authentication, live kitchen queue, menu management, and user controls.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

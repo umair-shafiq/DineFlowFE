@@ -1,4 +1,4 @@
-import { MenuItem, Category, Order, OrderItem } from './types';
+import { MenuItem, Category, Order, OrderItem, User, UserRole, AuthUser } from './types';
 
 export interface SpringBootSettings {
   enabled: boolean;
@@ -6,6 +6,8 @@ export interface SpringBootSettings {
   categoriesPath: string;
   menuItemsPath: string;
   ordersPath: string;
+  usersPath?: string;
+  authPath?: string;
 }
 
 const SETTINGS_KEY = 'spring_boot_connector_settings';
@@ -15,8 +17,28 @@ const DEFAULT_SETTINGS: SpringBootSettings = {
   baseUrl: 'http://localhost:8080',
   categoriesPath: '/api/categories',
   menuItemsPath: '/api/menu-items',
-  ordersPath: '/api/orders'
+  ordersPath: '/api/orders',
+  usersPath: '/api/users',
+  authPath: '/api/auth'
 };
+
+// In-memory JWT token storage (NOT saved in localStorage or sessionStorage)
+let inMemoryJwtToken: string | null = null;
+let onUnauthorizedCallback: ((message?: string) => void) | null = null;
+
+export function setAuthToken(token: string | null): void {
+  inMemoryJwtToken = token;
+}
+
+export function getAuthToken(): string | null {
+  return inMemoryJwtToken;
+}
+
+export function setOnUnauthorized(callback: ((message?: string) => void) | null): void {
+  onUnauthorizedCallback = callback;
+}
+
+export const setOnUnauthorizedCallback = setOnUnauthorized;
 
 // Load settings from localStorage
 export function getApiSettings(): SpringBootSettings {
@@ -29,6 +51,12 @@ export function getApiSettings(): SpringBootSettings {
       }
       if (!parsed.ordersPath) {
         parsed.ordersPath = '/api/orders';
+      }
+      if (!parsed.usersPath) {
+        parsed.usersPath = '/api/users';
+      }
+      if (!parsed.authPath) {
+        parsed.authPath = '/api/auth';
       }
       return { ...DEFAULT_SETTINGS, ...parsed };
     }
@@ -57,9 +85,14 @@ export async function testConnection(baseUrl: string, categoriesPath: string): P
     const sanitizedPath = categoriesPath.startsWith('/') ? categoriesPath : `/${categoriesPath}`;
     const url = `${baseUrl.replace(/\/$/, '')}${sanitizedPath}`;
 
+    const headers: Record<string, string> = { 'Accept': 'application/json' };
+    if (inMemoryJwtToken) {
+      headers['Authorization'] = `Bearer ${inMemoryJwtToken}`;
+    }
+
     const response = await fetch(url, {
       method: 'GET',
-      headers: { 'Accept': 'application/json' },
+      headers,
       signal: controller.signal,
       mode: 'cors'
     });
@@ -98,7 +131,7 @@ export async function testConnection(baseUrl: string, categoriesPath: string): P
   }
 }
 
-// Standard api fetch utility
+// Standard api fetch utility with Authorization & 401/403 interceptor
 async function apiRequest<T>(endpointPath: string, method: string = 'GET', body?: any): Promise<T> {
   const settings = getApiSettings();
   if (!settings.enabled) {
@@ -109,10 +142,15 @@ async function apiRequest<T>(endpointPath: string, method: string = 'GET', body?
   const pathSanitized = endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`;
   const url = `${baseUrlSanitized}${pathSanitized}`;
 
-  const headers: HeadersInit = {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'Accept': 'application/json'
   };
+
+  // Inject in-memory JWT token into Authorization header for all API calls
+  if (inMemoryJwtToken) {
+    headers['Authorization'] = `Bearer ${inMemoryJwtToken}`;
+  }
 
   const options: RequestInit = {
     method,
@@ -134,9 +172,40 @@ async function apiRequest<T>(endpointPath: string, method: string = 'GET', body?
     options.body = JSON.stringify(preparedBody);
   }
 
-  const response = await fetch(url, options);
+  let response: Response;
+  try {
+    response = await fetch(url, options);
+  } catch (networkErr: any) {
+    const err = new Error(`Network Error: Could not reach Spring Boot server at ${url}.`) as any;
+    err.isNetworkError = true;
+    throw err;
+  }
+
+  // Handle 401 Unauthorized or 403 Forbidden - Auto redirect to login
+  if (response.status === 401 || response.status === 403) {
+    inMemoryJwtToken = null;
+    if (onUnauthorizedCallback) {
+      onUnauthorizedCallback(
+        response.status === 401 
+          ? 'Invalid email or password' 
+          : 'Access denied: You do not have permission to perform this action.'
+      );
+    }
+    const err = new Error(response.status === 401 ? 'Invalid email or password' : 'Forbidden') as any;
+    err.status = response.status;
+    throw err;
+  }
+
   if (!response.ok) {
-    const err = new Error(`API Error: Spring Boot returned status ${response.status} (${response.statusText})`) as any;
+    let errorDetail = response.statusText;
+    try {
+      const errJson = await response.json();
+      if (errJson.message) errorDetail = errJson.message;
+      else if (errJson.error) errorDetail = errJson.error;
+    } catch {
+      // ignore
+    }
+    const err = new Error(`API Error: Spring Boot returned status ${response.status} (${errorDetail})`) as any;
     err.status = response.status;
     throw err;
   }
@@ -489,5 +558,161 @@ export const apiOrders = {
 
     const res = await apiRequest<any>(`${basePath}/${id}/status`, 'PATCH', { orderStatus });
     return normalizeOrder(res);
+  }
+};
+
+// Normalizer for User
+function normalizeUser(raw: any): User {
+  if (!raw) return raw;
+  const roleStr = String(raw.userRole || raw.role || 'WAITER').toUpperCase();
+  const validRole: UserRole = roleStr === 'ADMIN' ? 'ADMIN' : 'WAITER';
+  const rawStatus = raw.userStatus !== undefined ? raw.userStatus : (raw.enabled !== undefined ? raw.enabled : (raw.status !== undefined ? raw.status : true));
+  
+  return {
+    userId: Number(raw.userId || raw.id || 0),
+    id: String(raw.userId || raw.id || ''),
+    fullName: raw.fullName || raw.name || raw.email || 'User',
+    email: raw.email || '',
+    userRole: validRole,
+    userStatus: typeof rawStatus === 'boolean' ? rawStatus : String(rawStatus).toLowerCase() === 'true' || rawStatus === 1,
+    createdAt: raw.createdAt || new Date().toISOString()
+  };
+}
+
+// Authentication API
+export const apiAuth = {
+  login: async (credentials: { email: string; password: string }): Promise<AuthUser> => {
+    const settings = getApiSettings();
+    const basePath = (settings.authPath || '/api/auth').replace(/\/$/, '');
+    const baseUrl = settings.baseUrl.replace(/\/$/, '');
+    const url = `${baseUrl}${basePath}/login`;
+
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          email: credentials.email.trim(),
+          password: credentials.password
+        }),
+        mode: 'cors'
+      });
+    } catch (networkErr: any) {
+      const err = new Error(`Cannot connect to authentication server at ${url}. Please ensure Spring Boot is running on port 8080.`) as any;
+      err.isNetworkError = true;
+      throw err;
+    }
+
+    if (response.status === 401) {
+      throw new Error('Invalid email or password');
+    }
+
+    if (!response.ok) {
+      let message = 'Login failed';
+      try {
+        const data = await response.json();
+        if (data.message) message = data.message;
+        else if (data.error) message = data.error;
+      } catch {
+        // ignore
+      }
+      throw new Error(message);
+    }
+
+    const resJson = await response.json();
+    const token = resJson.token || resJson.jwt || resJson.accessToken || '';
+    const email = resJson.email || credentials.email;
+    const roleStr = String(resJson.userRole || resJson.role || 'ADMIN').toUpperCase();
+    const userRole: UserRole = roleStr === 'WAITER' ? 'WAITER' : 'ADMIN';
+
+    // Store in-memory token
+    if (token) {
+      setAuthToken(token);
+    }
+
+    return {
+      token,
+      email,
+      userRole,
+      fullName: resJson.fullName || resJson.name || email.split('@')[0],
+      userId: resJson.userId || resJson.id
+    };
+  }
+};
+
+// Users Management API (for ADMIN role)
+export const apiUsers = {
+  list: async (): Promise<User[]> => {
+    const settings = getApiSettings();
+    const path = settings.usersPath || '/api/users';
+    const list = await apiRequest<any[]>(path, 'GET');
+    return Array.isArray(list) ? list.map(normalizeUser) : [];
+  },
+
+  getById: async (id: number | string): Promise<User> => {
+    const settings = getApiSettings();
+    const basePath = (settings.usersPath || '/api/users').replace(/\/$/, '');
+    const res = await apiRequest<any>(`${basePath}/${id}`, 'GET');
+    return normalizeUser(res);
+  },
+
+  searchByEmail: async (email: string): Promise<User> => {
+    const settings = getApiSettings();
+    const basePath = (settings.usersPath || '/api/users').replace(/\/$/, '');
+    const encoded = encodeURIComponent(email.trim());
+    try {
+      // Primary search path as specified: /api/users/users/search?email=...
+      const res = await apiRequest<any>(`${basePath}/users/search?email=${encoded}`, 'GET');
+      return normalizeUser(res);
+    } catch (err: any) {
+      // Fallback path: /api/users/search?email=...
+      const res = await apiRequest<any>(`${basePath}/search?email=${encoded}`, 'GET');
+      return normalizeUser(res);
+    }
+  },
+
+  create: async (payload: { fullName: string; email: string; password?: string; userRole: UserRole }): Promise<User> => {
+    const settings = getApiSettings();
+    const path = settings.usersPath || '/api/users';
+    const body = {
+      fullName: payload.fullName.trim(),
+      email: payload.email.trim(),
+      password: payload.password || '',
+      userRole: payload.userRole
+    };
+    const res = await apiRequest<any>(path, 'POST', body);
+    return normalizeUser(res);
+  },
+
+  update: async (id: number | string, payload: { fullName: string; password?: string; userRole: UserRole }): Promise<User> => {
+    const settings = getApiSettings();
+    const basePath = (settings.usersPath || '/api/users').replace(/\/$/, '');
+    const body: Record<string, any> = {
+      fullName: payload.fullName.trim(),
+      userRole: payload.userRole
+    };
+    if (payload.password && payload.password.trim().length > 0) {
+      body.password = payload.password;
+    }
+    const res = await apiRequest<any>(`${basePath}/${id}`, 'PUT', body);
+    return normalizeUser(res);
+  },
+
+  updateStatus: async (id: number | string, enabled: boolean): Promise<User> => {
+    const settings = getApiSettings();
+    const basePath = (settings.usersPath || '/api/users').replace(/\/$/, '');
+    try {
+      // Primary path as specified in user request: /api/users/users/{id}/status?enabled=...
+      const res = await apiRequest<any>(`${basePath}/users/${id}/status?enabled=${enabled}`, 'PATCH');
+      return normalizeUser(res);
+    } catch (err: any) {
+      // Fallback path: /api/users/{id}/status?enabled=...
+      const res = await apiRequest<any>(`${basePath}/${id}/status?enabled=${enabled}`, 'PATCH');
+      return normalizeUser(res);
+    }
   }
 };

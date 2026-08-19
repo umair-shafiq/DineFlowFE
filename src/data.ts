@@ -1,4 +1,4 @@
-import { MenuItem, Category, Modifier, Order } from './types';
+import { MenuItem, Category, Modifier, Order, User } from './types';
 
 export const INITIAL_CATEGORIES: Category[] = [
   { id: 'cat-1', name: 'Appetizers' },
@@ -182,6 +182,33 @@ export const INITIAL_ORDERS: Order[] = [
     createdAt: new Date(Date.now() - 2 * 3600000).toISOString(), // 2 hours ago
     tableNumber: 'Bar 02',
     customerName: 'Zeno'
+  }
+];
+
+export const INITIAL_USERS: User[] = [
+  {
+    userId: 4,
+    fullName: 'Default Admin',
+    email: 'admin@dineflow.com',
+    userRole: 'ADMIN',
+    userStatus: true,
+    createdAt: '2026-08-16T14:59:14'
+  },
+  {
+    userId: 5,
+    fullName: 'Umair',
+    email: 'umair@dineflow.com',
+    userRole: 'WAITER',
+    userStatus: true,
+    createdAt: '2026-08-19T14:52:07'
+  },
+  {
+    userId: 1,
+    fullName: 'Ibrahim',
+    email: 'ibrahim@example.com',
+    userRole: 'WAITER',
+    userStatus: false,
+    createdAt: '2026-08-13T17:53:32'
   }
 ];
 

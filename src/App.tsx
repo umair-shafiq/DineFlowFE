@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import MenuItemsView from './components/MenuItemsView';
@@ -7,21 +7,37 @@ import ModifiersView from './components/ModifiersView';
 import OrdersView from './components/OrdersView';
 import ReportsView from './components/ReportsView';
 import SupportView from './components/SupportView';
+import UsersView from './components/UsersView';
+import LoginView from './components/LoginView';
 
-import { MenuItem, Category, Modifier, Order } from './types';
+import { MenuItem, Category, Modifier, Order, AuthUser, User } from './types';
 import {
   INITIAL_MENU_ITEMS,
   INITIAL_CATEGORIES,
   INITIAL_MODIFIERS,
   INITIAL_ORDERS,
+  INITIAL_USERS,
   loadData,
   saveData
 } from './data';
-import { SpringBootSettings, getApiSettings, saveApiSettings, apiCategories, apiMenuItems, apiOrders } from './api';
+import { 
+  SpringBootSettings, 
+  getApiSettings, 
+  saveApiSettings, 
+  apiCategories, 
+  apiMenuItems, 
+  apiOrders,
+  apiUsers,
+  setAuthToken,
+  setOnUnauthorizedCallback
+} from './api';
 
 export default function App() {
+  // In-Memory Authentication State (No localStorage or sessionStorage used for JWT/Auth per requirement)
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+
   // Navigation & Search State
-  const [currentTab, setCurrentTab] = useState<string>('menu-items');
+  const [currentTab, setCurrentTab] = useState<string>('orders');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Core Data States
@@ -29,6 +45,7 @@ export default function App() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [modifiers, setModifiers] = useState<Modifier[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
 
   // Spring Boot Integration States
   const [apiSettings, setApiSettings] = useState<SpringBootSettings>(getApiSettings());
@@ -38,6 +55,34 @@ export default function App() {
 
   // Menu items Add Modal global trigger
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+
+  // Intercept 401/403 session expiration
+  useEffect(() => {
+    setOnUnauthorizedCallback(() => {
+      console.warn('Session expired or unauthorized (401/403). Resetting memory auth state.');
+      setCurrentUser(null);
+      setAuthToken(null);
+    });
+  }, []);
+
+  // Handle successful login and role-based redirect
+  const handleLoginSuccess = useCallback((user: AuthUser) => {
+    setCurrentUser(user);
+    if (user.userRole === 'ADMIN') {
+      // "ADMIN" → redirect to dashboard
+      setCurrentTab('reports');
+    } else {
+      // "WAITER" → redirect to orders
+      setCurrentTab('orders');
+    }
+  }, []);
+
+  // Handle logout
+  const handleLogout = useCallback(() => {
+    setAuthToken(null);
+    setCurrentUser(null);
+    setCurrentTab('orders');
+  }, []);
 
   // Initialize and load persistent data or fetch from Spring Boot REST API
   const loadAllData = async (settingsToUse = apiSettings) => {
@@ -51,9 +96,6 @@ export default function App() {
       let catSuccess = false;
       let itemsSuccess = false;
       let ordersSuccess = false;
-      let catErrorMsg = '';
-      let itemsErrorMsg = '';
-      let ordersErrorMsg = '';
       let loadedCatsCount = 0;
       let loadedItemsCount = 0;
       let loadedOrdersCount = 0;
@@ -66,7 +108,6 @@ export default function App() {
         catSuccess = true;
       } catch (err: any) {
         console.warn('Failed to load categories from Spring Boot. Falling back to LocalStorage.', err);
-        catErrorMsg = err.message || 'Network error';
         setCategories(loadData<Category[]>('chef_categories', INITIAL_CATEGORIES));
       }
 
@@ -78,7 +119,6 @@ export default function App() {
         itemsSuccess = true;
       } catch (err: any) {
         console.warn('Failed to load menu items from Spring Boot. Falling back to LocalStorage.', err);
-        itemsErrorMsg = err.message || 'Network error';
         setItems(loadData<MenuItem[]>('chef_menu_items', INITIAL_MENU_ITEMS));
       }
 
@@ -90,8 +130,19 @@ export default function App() {
         ordersSuccess = true;
       } catch (err: any) {
         console.warn('Failed to load orders from Spring Boot. Falling back to LocalStorage.', err);
-        ordersErrorMsg = err.message || 'Network error';
         setOrders(loadData<Order[]>('chef_orders', INITIAL_ORDERS));
+      }
+
+      // 4. Fetch users (if authenticated/accessible)
+      try {
+        const fetchedUsers = await apiUsers.list();
+        if (Array.isArray(fetchedUsers) && fetchedUsers.length > 0) {
+          setUsers(fetchedUsers);
+        } else {
+          setUsers(loadData<User[]>('chef_users', INITIAL_USERS));
+        }
+      } catch (err) {
+        setUsers(loadData<User[]>('chef_users', INITIAL_USERS));
       }
 
       if (catSuccess && itemsSuccess && ordersSuccess) {
@@ -119,6 +170,7 @@ export default function App() {
       setCategories(loadData<Category[]>('chef_categories', INITIAL_CATEGORIES));
       setItems(loadData<MenuItem[]>('chef_menu_items', INITIAL_MENU_ITEMS));
       setOrders(loadData<Order[]>('chef_orders', INITIAL_ORDERS));
+      setUsers(loadData<User[]>('chef_users', INITIAL_USERS));
       setApiConnected(null);
       setIsApiLoading(false);
     }
@@ -362,6 +414,11 @@ export default function App() {
     }
   };
 
+  const handleUsersChange = (updatedUsers: User[]) => {
+    setUsers(updatedUsers);
+    saveData('chef_users', updatedUsers);
+  };
+
   // Cascade category edits or deletions down to menu items
   const handleItemsCategoryReset = (oldCategoryName: string, newCategoryName: string) => {
     const updatedItems = items.map((item) => {
@@ -375,9 +432,7 @@ export default function App() {
 
   // Shortcut from header to trigger opening the new menu item modal
   const handleAddShortcutClick = () => {
-    // Switch to menu-items tab first, then open modal
     setCurrentTab('menu-items');
-    // Give it a tiny delay to allow tab render transition if necessary
     setTimeout(() => {
       setIsAddModalOpen(true);
     }, 50);
@@ -388,18 +443,33 @@ export default function App() {
     (o) => o.status === 'pending' || o.status === 'preparing'
   ).length;
 
+  // If user is not authenticated, show DineFlow Login View
+  if (!currentUser) {
+    return <LoginView onLoginSuccess={handleLoginSuccess} />;
+  }
+
+  const isAdmin = currentUser.userRole === 'ADMIN';
+
+  // Role-based view authorization: WAITER is locked strictly to 'orders' view
+  const safeTab = (!isAdmin && currentTab !== 'orders') ? 'orders' : currentTab;
+
   return (
     <div className="flex min-h-screen bg-surf-bg text-text-primary font-sans" id="chef-app-root">
       
       {/* Persistent Left Sidebar Navigation */}
-      <Sidebar currentTab={currentTab} onTabChange={setCurrentTab} />
+      <Sidebar 
+        currentTab={safeTab} 
+        onTabChange={setCurrentTab} 
+        currentUser={currentUser}
+        onLogout={handleLogout}
+      />
 
       {/* Main Container - Offsets left by sidebar width (w-64 = 16rem) */}
       <div className="flex-1 ml-64 min-w-0 flex flex-col min-h-screen" id="chef-main-viewport">
         
         {/* Persistent Top Navbar with Search & Shortcuts */}
         <Header
-          currentTab={currentTab}
+          currentTab={safeTab}
           onTabChange={setCurrentTab}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
@@ -407,11 +477,13 @@ export default function App() {
           pendingOrdersCount={pendingOrdersCount}
           apiEnabled={apiSettings.enabled}
           apiConnected={apiConnected}
+          currentUser={currentUser}
+          onLogout={handleLogout}
         />
 
         {/* Core Tab Routing Pages */}
         <main className="flex-1 pb-12" id="chef-content-stage">
-          {currentTab === 'menu-items' && (
+          {safeTab === 'menu-items' && isAdmin && (
             <MenuItemsView
               items={items}
               categories={categories}
@@ -423,7 +495,7 @@ export default function App() {
             />
           )}
 
-          {currentTab === 'categories' && (
+          {safeTab === 'categories' && isAdmin && (
             <CategoriesView
               categories={categories}
               items={items}
@@ -432,7 +504,7 @@ export default function App() {
             />
           )}
 
-          {currentTab === 'modifiers' && (
+          {safeTab === 'modifiers' && isAdmin && (
             <ModifiersView
               modifiers={modifiers}
               items={items}
@@ -440,16 +512,17 @@ export default function App() {
             />
           )}
 
-          {currentTab === 'orders' && (
+          {safeTab === 'orders' && (
             <OrdersView
               orders={orders}
               items={items}
               modifiers={modifiers}
               onOrdersChange={handleOrdersChange}
+              userRole={currentUser.userRole}
             />
           )}
 
-          {currentTab === 'reports' && (
+          {safeTab === 'reports' && isAdmin && (
             <ReportsView 
               orders={orders} 
               items={items} 
@@ -457,7 +530,15 @@ export default function App() {
             />
           )}
 
-          {currentTab === 'support' && (
+          {safeTab === 'users' && isAdmin && (
+            <UsersView 
+              users={users}
+              onUsersChange={handleUsersChange}
+              apiEnabled={apiSettings.enabled}
+            />
+          )}
+
+          {safeTab === 'support' && isAdmin && (
             <SupportView
               items={items}
               categories={categories}
