@@ -664,15 +664,8 @@ export const apiUsers = {
     const settings = getApiSettings();
     const basePath = (settings.usersPath || '/api/users').replace(/\/$/, '');
     const encoded = encodeURIComponent(email.trim());
-    try {
-      // Primary search path as specified: /api/users/users/search?email=...
-      const res = await apiRequest<any>(`${basePath}/users/search?email=${encoded}`, 'GET');
-      return normalizeUser(res);
-    } catch (err: any) {
-      // Fallback path: /api/users/search?email=...
-      const res = await apiRequest<any>(`${basePath}/search?email=${encoded}`, 'GET');
-      return normalizeUser(res);
-    }
+    const res = await apiRequest<any>(`${basePath}/search?email=${encoded}`, 'GET');
+    return normalizeUser(res);
   },
 
   create: async (payload: { fullName: string; email: string; password?: string; userRole: UserRole }): Promise<User> => {
@@ -705,14 +698,8 @@ export const apiUsers = {
   updateStatus: async (id: number | string, enabled: boolean): Promise<User> => {
     const settings = getApiSettings();
     const basePath = (settings.usersPath || '/api/users').replace(/\/$/, '');
-    try {
-      // Primary path as specified in user request: /api/users/users/{id}/status?enabled=...
-      const res = await apiRequest<any>(`${basePath}/users/${id}/status?enabled=${enabled}`, 'PATCH');
-      return normalizeUser(res);
-    } catch (err: any) {
-      // Fallback path: /api/users/{id}/status?enabled=...
-      const res = await apiRequest<any>(`${basePath}/${id}/status?enabled=${enabled}`, 'PATCH');
-      return normalizeUser(res);
-    }
+    // Correct clean endpoint: /api/users/{id}/status?enabled=...
+    const res = await apiRequest<any>(`${basePath}/${id}/status?enabled=${enabled}`, 'PATCH');
+    return normalizeUser(res);
   }
 };
