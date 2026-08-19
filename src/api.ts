@@ -184,18 +184,21 @@ async function apiRequest<T>(endpointPath: string, method: string = 'GET', body?
     throw err;
   }
 
-  // Handle 401 Unauthorized or 403 Forbidden - Auto redirect to login
-  if (response.status === 401 || response.status === 403) {
+  // Handle 401 Unauthorized (invalid or expired session)
+  if (response.status === 401) {
     inMemoryJwtToken = null;
     if (onUnauthorizedCallback) {
-      onUnauthorizedCallback(
-        response.status === 401 
-          ? 'Invalid email or password' 
-          : 'Access denied: You do not have permission to perform this action.'
-      );
+      onUnauthorizedCallback('Invalid email or password');
     }
-    const err = new Error(response.status === 401 ? 'Invalid email or password' : 'Forbidden') as any;
-    err.status = response.status;
+    const err = new Error('Invalid email or password') as any;
+    err.status = 401;
+    throw err;
+  }
+
+  // Handle 403 Forbidden (insufficient permission for this endpoint, keep user logged in)
+  if (response.status === 403) {
+    const err = new Error('Access denied: You do not have permission to access this endpoint.') as any;
+    err.status = 403;
     throw err;
   }
 

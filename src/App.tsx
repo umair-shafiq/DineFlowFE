@@ -83,8 +83,8 @@ export default function App() {
       setCurrentTab('orders');
     }
 
-    // Immediately fetch live orders & data from Spring Boot using the authenticated token
-    loadAllData(activeSettings);
+    // Immediately fetch live orders & data based on user role
+    loadAllData(activeSettings, user);
   }, []);
 
   // Handle logout
@@ -95,14 +95,17 @@ export default function App() {
   }, []);
 
   // Initialize and load persistent data or fetch from Spring Boot REST API
-  const loadAllData = async (settingsToUse = apiSettings) => {
+  const loadAllData = async (settingsToUse = apiSettings, userOverride?: AuthUser | null) => {
     setIsApiLoading(true);
     setApiStatusMessage(null);
     
     // Always load local modifiers
     setModifiers(loadData<Modifier[]>('chef_modifiers', INITIAL_MODIFIERS));
 
-    if (settingsToUse.enabled) {
+    const effectiveUser = userOverride !== undefined ? userOverride : currentUser;
+    const isWaiterUser = effectiveUser?.userRole === 'WAITER';
+
+    if (settingsToUse.enabled && effectiveUser) {
       let catSuccess = false;
       let itemsSuccess = false;
       let ordersSuccess = false;
@@ -110,29 +113,37 @@ export default function App() {
       let loadedItemsCount = 0;
       let loadedOrdersCount = 0;
 
-      // 1. Fetch categories
-      try {
-        const fetchedCategories = await apiCategories.list();
-        setCategories(fetchedCategories);
-        loadedCatsCount = fetchedCategories.length;
-        catSuccess = true;
-      } catch (err: any) {
-        console.warn('Failed to load categories from Spring Boot. Falling back to LocalStorage.', err);
+      // 1. Fetch categories (ADMIN only - Waiter has no access to categories endpoint)
+      if (!isWaiterUser) {
+        try {
+          const fetchedCategories = await apiCategories.list();
+          setCategories(fetchedCategories);
+          loadedCatsCount = fetchedCategories.length;
+          catSuccess = true;
+        } catch (err: any) {
+          console.warn('Failed to load categories from Spring Boot. Falling back to LocalStorage.', err);
+          setCategories(loadData<Category[]>('chef_categories', INITIAL_CATEGORIES));
+        }
+      } else {
         setCategories(loadData<Category[]>('chef_categories', INITIAL_CATEGORIES));
       }
 
-      // 2. Fetch menu items
-      try {
-        const fetchedItems = await apiMenuItems.list();
-        setItems(fetchedItems);
-        loadedItemsCount = fetchedItems.length;
-        itemsSuccess = true;
-      } catch (err: any) {
-        console.warn('Failed to load menu items from Spring Boot. Falling back to LocalStorage.', err);
+      // 2. Fetch menu items (ADMIN only - Waiter has no access to menu-items endpoint)
+      if (!isWaiterUser) {
+        try {
+          const fetchedItems = await apiMenuItems.list();
+          setItems(fetchedItems);
+          loadedItemsCount = fetchedItems.length;
+          itemsSuccess = true;
+        } catch (err: any) {
+          console.warn('Failed to load menu items from Spring Boot. Falling back to LocalStorage.', err);
+          setItems(loadData<MenuItem[]>('chef_menu_items', INITIAL_MENU_ITEMS));
+        }
+      } else {
         setItems(loadData<MenuItem[]>('chef_menu_items', INITIAL_MENU_ITEMS));
       }
 
-      // 3. Fetch orders
+      // 3. Fetch orders (Accessible by both WAITER and ADMIN)
       try {
         const fetchedOrders = await apiOrders.list();
         setOrders(fetchedOrders);
@@ -143,40 +154,60 @@ export default function App() {
         setOrders(loadData<Order[]>('chef_orders', INITIAL_ORDERS));
       }
 
-      // 4. Fetch users (if authenticated/accessible)
-      try {
-        const fetchedUsers = await apiUsers.list();
-        if (Array.isArray(fetchedUsers) && fetchedUsers.length > 0) {
-          setUsers(fetchedUsers);
-        } else {
+      // 4. Fetch users (ADMIN only - Waiter has no access to users endpoint)
+      if (!isWaiterUser) {
+        try {
+          const fetchedUsers = await apiUsers.list();
+          if (Array.isArray(fetchedUsers) && fetchedUsers.length > 0) {
+            setUsers(fetchedUsers);
+          } else {
+            setUsers(loadData<User[]>('chef_users', INITIAL_USERS));
+          }
+        } catch (err) {
           setUsers(loadData<User[]>('chef_users', INITIAL_USERS));
         }
-      } catch (err) {
+      } else {
         setUsers(loadData<User[]>('chef_users', INITIAL_USERS));
       }
 
-      if (catSuccess && itemsSuccess && ordersSuccess) {
-        setApiConnected(true);
-        setApiStatusMessage({
-          type: 'success',
-          text: `Successfully connected to Spring Boot REST API! Loaded ${loadedCatsCount} categories, ${loadedItemsCount} menu items, and ${loadedOrdersCount} orders from the live database.`
-        });
-      } else if (catSuccess || itemsSuccess || ordersSuccess) {
-        setApiConnected(true);
-        setApiStatusMessage({
-          type: 'warning',
-          text: `Partially connected! ${catSuccess ? `${loadedCatsCount} categories loaded.` : ''} ${itemsSuccess ? `${loadedItemsCount} items loaded.` : ''} ${ordersSuccess ? `${loadedOrdersCount} orders loaded.` : ''}`
-        });
+      if (isWaiterUser) {
+        if (ordersSuccess) {
+          setApiConnected(true);
+          setApiStatusMessage({
+            type: 'success',
+            text: `Connected to Spring Boot Live Orders Queue! Loaded ${loadedOrdersCount} orders.`
+          });
+        } else {
+          setApiConnected(false);
+          setApiStatusMessage({
+            type: 'error',
+            text: `Could not connect to Spring Boot server at "${settingsToUse.baseUrl}".`
+          });
+        }
       } else {
-        setApiConnected(false);
-        setApiStatusMessage({
-          type: 'error',
-          text: `Could not connect to Spring Boot server at "${settingsToUse.baseUrl}". Fell back to Local Storage backup.`
-        });
+        if (catSuccess && itemsSuccess && ordersSuccess) {
+          setApiConnected(true);
+          setApiStatusMessage({
+            type: 'success',
+            text: `Successfully connected to Spring Boot REST API! Loaded ${loadedCatsCount} categories, ${loadedItemsCount} menu items, and ${loadedOrdersCount} orders from the live database.`
+          });
+        } else if (catSuccess || itemsSuccess || ordersSuccess) {
+          setApiConnected(true);
+          setApiStatusMessage({
+            type: 'warning',
+            text: `Partially connected! ${catSuccess ? `${loadedCatsCount} categories loaded.` : ''} ${itemsSuccess ? `${loadedItemsCount} items loaded.` : ''} ${ordersSuccess ? `${loadedOrdersCount} orders loaded.` : ''}`
+          });
+        } else {
+          setApiConnected(false);
+          setApiStatusMessage({
+            type: 'error',
+            text: `Could not connect to Spring Boot server at "${settingsToUse.baseUrl}". Fell back to Local Storage backup.`
+          });
+        }
       }
       setIsApiLoading(false);
     } else {
-      // Offline mode - Load directly from LocalStorage
+      // Offline / Pre-login mode - Load directly from LocalStorage
       setCategories(loadData<Category[]>('chef_categories', INITIAL_CATEGORIES));
       setItems(loadData<MenuItem[]>('chef_menu_items', INITIAL_MENU_ITEMS));
       setOrders(loadData<Order[]>('chef_orders', INITIAL_ORDERS));
