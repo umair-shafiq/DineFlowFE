@@ -68,6 +68,13 @@ export default function App() {
   // Handle successful login and role-based redirect
   const handleLoginSuccess = useCallback((user: AuthUser) => {
     setCurrentUser(user);
+    const activeSettings: SpringBootSettings = {
+      ...getApiSettings(),
+      enabled: true
+    };
+    setApiSettings(activeSettings);
+    saveApiSettings(activeSettings);
+
     if (user.userRole === 'ADMIN') {
       // "ADMIN" → redirect to dashboard
       setCurrentTab('reports');
@@ -75,6 +82,9 @@ export default function App() {
       // "WAITER" → redirect to orders
       setCurrentTab('orders');
     }
+
+    // Immediately fetch live orders & data from Spring Boot using the authenticated token
+    loadAllData(activeSettings);
   }, []);
 
   // Handle logout

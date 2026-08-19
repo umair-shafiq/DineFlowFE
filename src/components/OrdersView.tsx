@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MenuItem, Modifier, Order, OrderItem, UserRole } from '../types';
 import { Plus, Minus, Clipboard, ShoppingCart, Check, Play, Ban, Sparkles, User, Hash, X, Search, Zap, RefreshCw, Eye, CheckCircle2, Utensils, ShoppingBag, Shield, UserCheck } from 'lucide-react';
 import { apiOrders } from '../api';
@@ -42,13 +42,18 @@ export default function OrdersView({
   const [activeEndpointMode, setActiveEndpointMode] = useState<'all' | 'active'>('all');
   const [isLoadingActive, setIsLoadingActive] = useState(false);
 
+  // Auto-fetch live orders on initial mount
+  useEffect(() => {
+    handleFetchAllOrders();
+  }, []);
+
   // Fetch active orders specifically using GET /api/orders/active
   const handleFetchActiveOrders = async () => {
     setActiveEndpointMode('active');
     setIsLoadingActive(true);
     try {
       const activeList = await apiOrders.listActive();
-      if (Array.isArray(activeList) && activeList.length > 0) {
+      if (Array.isArray(activeList)) {
         onOrdersChange(activeList);
       }
     } catch (err: any) {
@@ -64,7 +69,7 @@ export default function OrdersView({
     setIsLoadingActive(true);
     try {
       const allList = await apiOrders.list();
-      if (Array.isArray(allList) && allList.length > 0) {
+      if (Array.isArray(allList)) {
         onOrdersChange(allList);
       }
     } catch (err: any) {

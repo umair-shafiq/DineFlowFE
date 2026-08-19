@@ -13,7 +13,7 @@ export interface SpringBootSettings {
 const SETTINGS_KEY = 'spring_boot_connector_settings';
 
 const DEFAULT_SETTINGS: SpringBootSettings = {
-  enabled: false,
+  enabled: true,
   baseUrl: 'http://localhost:8080',
   categoriesPath: '/api/categories',
   menuItemsPath: '/api/menu-items',
@@ -57,6 +57,9 @@ export function getApiSettings(): SpringBootSettings {
       }
       if (!parsed.authPath) {
         parsed.authPath = '/api/auth';
+      }
+      if (parsed.enabled === undefined) {
+        parsed.enabled = true;
       }
       return { ...DEFAULT_SETTINGS, ...parsed };
     }
@@ -495,10 +498,11 @@ export const apiOrders = {
     return Array.isArray(list) ? list.map(normalizeOrder) : [];
   },
 
-  get: async (id: string): Promise<Order> => {
+  get: async (idOrTicket: string): Promise<Order> => {
     const settings = getApiSettings();
     const basePath = (settings.ordersPath || '/api/orders').replace(/\/$/, '');
-    const res = await apiRequest<any>(`${basePath}/${id}`, 'GET');
+    const clean = encodeURIComponent(String(idOrTicket).trim());
+    const res = await apiRequest<any>(`${basePath}/${clean}`, 'GET');
     return normalizeOrder(res);
   },
 
