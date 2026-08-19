@@ -210,7 +210,7 @@ export default function OrdersView({
   const cartTotal = cart.reduce((sum, ci) => sum + (ci.price * ci.quantity), 0);
 
   // Place Order Action
-  const handlePlaceOrder = (e: React.FormEvent) => {
+  const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (cart.length === 0) return;
 
@@ -218,7 +218,7 @@ export default function OrdersView({
     const tableIdNum = isDineIn ? (parseInt(tableNumber.replace(/\D/g, '')) || 2) : undefined;
     const tableStr = isDineIn ? (tableNumber.trim() || `Table 0${tableIdNum}`) : 'Takeaway';
 
-    const newOrder: Order = {
+    let createdOrder: Order = {
       id: 'order-' + Date.now(),
       orderNumber: (orders.length + 1001).toString(),
       items: cart,
@@ -232,7 +232,18 @@ export default function OrdersView({
       customerName: customerName.trim() || (isDineIn ? tableStr : 'Takeaway Customer')
     };
 
-    onOrdersChange([newOrder, ...orders]);
+    if (!isWaiter) {
+      try {
+        const res = await apiOrders.create(createdOrder);
+        if (res && (res.id || res.orderId)) {
+          createdOrder = { ...createdOrder, ...res };
+        }
+      } catch (err) {
+        console.warn('Could not post order to backend API, saved locally', err);
+      }
+    }
+
+    onOrdersChange([createdOrder, ...orders]);
     setCart([]);
     setCustomerName('');
     setTableNumber('Table 02');
@@ -241,10 +252,22 @@ export default function OrdersView({
   };
 
   // Advance Order Status Flow
-  const handleAdvanceStatus = (orderId: string, nextStatus: 'preparing' | 'completed' | 'cancelled') => {
+  const handleAdvanceStatus = async (orderId: string, nextStatus: 'preparing' | 'completed' | 'cancelled') => {
+    const backendStatus = nextStatus === 'preparing' ? 'IN_PROGRESS' 
+      : nextStatus === 'completed' ? 'COMPLETED' 
+      : nextStatus === 'cancelled' ? 'CANCELLED' : 'PLACED';
+
+    if (!isWaiter) {
+      try {
+        await apiOrders.updateStatus(orderId, backendStatus);
+      } catch (err) {
+        console.warn('Status update API error:', err);
+      }
+    }
+
     const updated = orders.map(ord => {
-      if (ord.id === orderId) {
-        return { ...ord, status: nextStatus };
+      if (ord.id === orderId || String(ord.orderId) === String(orderId)) {
+        return { ...ord, status: nextStatus, orderStatus: backendStatus };
       }
       return ord;
     });

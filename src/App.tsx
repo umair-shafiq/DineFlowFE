@@ -386,73 +386,9 @@ export default function App() {
     handleItemsChange(cleanedItems);
   };
 
-  const handleOrdersChange = async (updatedOrders: Order[]) => {
-    if (apiSettings.enabled) {
-      try {
-        const isMatch = (a: Order, b: Order) => 
-          String(a.id) === String(b.id) || 
-          (a.orderId !== undefined && b.orderId !== undefined && String(a.orderId) === String(b.orderId)) ||
-          (a.orderNumber && b.orderNumber && String(a.orderNumber).toLowerCase() === String(b.orderNumber).toLowerCase());
-
-        const added = updatedOrders.filter(uo => !orders.some(o => isMatch(o, uo)));
-        const statusChanged = updatedOrders.filter(uo => {
-          const matched = orders.find(o => isMatch(o, uo));
-          return matched && matched.status !== uo.status;
-        });
-
-        for (const newOrd of added) {
-          try {
-            const res = await apiOrders.create(newOrd);
-            if (res && res.id) {
-              newOrd.id = String(res.id);
-              newOrd.orderId = res.orderId || res.id;
-              newOrd.orderNumber = res.orderNumber || newOrd.orderNumber;
-              newOrd.orderStatus = res.orderStatus || newOrd.orderStatus;
-              newOrd.orderType = res.orderType || newOrd.orderType;
-              newOrd.subtotal = res.subtotal;
-              newOrd.taxAmount = res.taxAmount;
-              newOrd.totalAmount = res.totalAmount;
-              newOrd.restaurantTable = res.restaurantTable;
-              if (res.tableNumber) newOrd.tableNumber = res.tableNumber;
-            }
-          } catch (createErr: any) {
-            console.warn('Order creation API sync error:', createErr);
-          }
-        }
-
-        for (const statusOrd of statusChanged) {
-          try {
-            const backendStatus = statusOrd.status === 'preparing' ? 'IN_PROGRESS' 
-              : statusOrd.status === 'completed' ? 'COMPLETED' 
-              : statusOrd.status === 'cancelled' ? 'CANCELLED' : 'PLACED';
-            await apiOrders.updateStatus(statusOrd.id, backendStatus);
-          } catch (statusErr: any) {
-            console.warn('Order status PATCH sync error:', statusErr);
-          }
-        }
-
-        // Merge updatedOrders into orders without dropping unreferenced historical items
-        const merged = [...orders];
-        for (const uo of updatedOrders) {
-          const idx = merged.findIndex(o => isMatch(o, uo));
-          if (idx !== -1) {
-            merged[idx] = { ...merged[idx], ...uo };
-          } else {
-            merged.unshift(uo);
-          }
-        }
-
-        setOrders(merged);
-        saveData('chef_orders', merged);
-      } catch (err: any) {
-        console.error('Failed to sync orders to Spring Boot', err);
-        setOrders(updatedOrders);
-        saveData('chef_orders', updatedOrders);
-      }
-    } else {
-      setOrders(updatedOrders);
-      saveData('chef_orders', updatedOrders);
-    }
+  const handleOrdersChange = (updatedOrders: Order[]) => {
+    setOrders(updatedOrders);
+    saveData('chef_orders', updatedOrders);
   };
 
   const handleUsersChange = (updatedUsers: User[]) => {
