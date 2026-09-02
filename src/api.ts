@@ -1,4 +1,4 @@
-import { MenuItem, Category, Order, OrderItem, User, UserRole, AuthUser } from './types';
+import { MenuItem, Category, Order, OrderItem, User, UserRole, AuthUser, RestaurantTable, TableStatus } from './types';
 
 export interface SpringBootSettings {
   enabled: boolean;
@@ -8,6 +8,7 @@ export interface SpringBootSettings {
   ordersPath: string;
   usersPath?: string;
   authPath?: string;
+  tablesPath?: string;
 }
 
 const SETTINGS_KEY = 'spring_boot_connector_settings';
@@ -19,7 +20,8 @@ const DEFAULT_SETTINGS: SpringBootSettings = {
   menuItemsPath: '/api/menu-items',
   ordersPath: '/api/orders',
   usersPath: '/api/users',
-  authPath: '/api/auth'
+  authPath: '/api/auth',
+  tablesPath: '/api/tables'
 };
 
 // In-memory JWT token storage (NOT saved in localStorage or sessionStorage)
@@ -708,5 +710,66 @@ export const apiUsers = {
     // Correct clean endpoint: /api/users/{id}/status?enabled=...
     const res = await apiRequest<any>(`${basePath}/${id}/status?enabled=${enabled}`, 'PATCH');
     return normalizeUser(res);
+  }
+};
+
+// Normalizer for Restaurant Table
+function normalizeTable(raw: any): RestaurantTable {
+  if (!raw) return raw;
+  const tableId = Number(raw.restaurantTableId || raw.id || 0);
+  return {
+    restaurantTableId: tableId,
+    id: tableId,
+    tableNumber: String(raw.tableNumber || (tableId ? `T-0${tableId}` : 'T-01')),
+    capacity: Number(raw.capacity || 4),
+    tableStatus: String(raw.tableStatus || raw.status || 'FREE').toUpperCase() as TableStatus
+  };
+}
+
+// Restaurant Tables REST API
+export const apiTables = {
+  list: async (): Promise<RestaurantTable[]> => {
+    const settings = getApiSettings();
+    const path = settings.tablesPath || '/api/tables';
+    const list = await apiRequest<any[]>(path, 'GET');
+    return Array.isArray(list) ? list.map(normalizeTable) : [];
+  },
+
+  getById: async (id: number | string): Promise<RestaurantTable> => {
+    const settings = getApiSettings();
+    const basePath = (settings.tablesPath || '/api/tables').replace(/\/$/, '');
+    const res = await apiRequest<any>(`${basePath}/${id}`, 'GET');
+    return normalizeTable(res);
+  },
+
+  create: async (payload: { tableNumber: string; capacity: number; tableStatus?: TableStatus }): Promise<RestaurantTable> => {
+    const settings = getApiSettings();
+    const path = settings.tablesPath || '/api/tables';
+    const body = {
+      tableNumber: payload.tableNumber.trim(),
+      capacity: Number(payload.capacity),
+      tableStatus: payload.tableStatus || 'FREE'
+    };
+    const res = await apiRequest<any>(path, 'POST', body);
+    return normalizeTable(res);
+  },
+
+  update: async (id: number | string, payload: { capacity: number; tableNumber?: string }): Promise<RestaurantTable> => {
+    const settings = getApiSettings();
+    const basePath = (settings.tablesPath || '/api/tables').replace(/\/$/, '');
+    const body: Record<string, any> = {
+      capacity: Number(payload.capacity)
+    };
+    if (payload.tableNumber && payload.tableNumber.trim().length > 0) {
+      body.tableNumber = payload.tableNumber.trim();
+    }
+    const res = await apiRequest<any>(`${basePath}/${id}`, 'PUT', body);
+    return normalizeTable(res);
+  },
+
+  delete: async (id: number | string): Promise<void> => {
+    const settings = getApiSettings();
+    const basePath = (settings.tablesPath || '/api/tables').replace(/\/$/, '');
+    await apiRequest<any>(`${basePath}/${id}`, 'DELETE');
   }
 };

@@ -10,7 +10,8 @@ import {
   LogOut, 
   Users, 
   Shield, 
-  UserCheck 
+  UserCheck,
+  LayoutGrid
 } from 'lucide-react';
 import { AuthUser } from '../types';
 
@@ -28,6 +29,7 @@ export default function Sidebar({ currentTab, onTabChange, currentUser, onLogout
   const adminMenuItems = [
     { id: 'reports', label: 'Dashboard', icon: BarChart3 },
     { id: 'orders', label: 'Orders Terminal', icon: ClipboardList },
+    { id: 'tables', label: 'Table Management', icon: LayoutGrid },
     { id: 'menu-items', label: 'Menu Items', icon: UtensilsCrossed },
     { id: 'categories', label: 'Categories', icon: Layers },
     { id: 'modifiers', label: 'Modifiers', icon: Sliders },

@@ -8,15 +8,17 @@ import OrdersView from './components/OrdersView';
 import ReportsView from './components/ReportsView';
 import SupportView from './components/SupportView';
 import UsersView from './components/UsersView';
+import TablesView from './components/TablesView';
 import LoginView from './components/LoginView';
 
-import { MenuItem, Category, Modifier, Order, AuthUser, User } from './types';
+import { MenuItem, Category, Modifier, Order, AuthUser, User, RestaurantTable } from './types';
 import {
   INITIAL_MENU_ITEMS,
   INITIAL_CATEGORIES,
   INITIAL_MODIFIERS,
   INITIAL_ORDERS,
   INITIAL_USERS,
+  INITIAL_TABLES,
   loadData,
   saveData
 } from './data';
@@ -28,6 +30,7 @@ import {
   apiMenuItems, 
   apiOrders,
   apiUsers,
+  apiTables,
   setAuthToken,
   setOnUnauthorizedCallback
 } from './api';
@@ -46,6 +49,7 @@ export default function App() {
   const [modifiers, setModifiers] = useState<Modifier[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [tables, setTables] = useState<RestaurantTable[]>([]);
 
   // Spring Boot Integration States
   const [apiSettings, setApiSettings] = useState<SpringBootSettings>(getApiSettings());
@@ -170,6 +174,23 @@ export default function App() {
         setUsers(loadData<User[]>('chef_users', INITIAL_USERS));
       }
 
+      // 5. Fetch restaurant tables (ADMIN only - GET /api/tables)
+      if (!isWaiterUser) {
+        try {
+          const fetchedTables = await apiTables.list();
+          if (Array.isArray(fetchedTables) && fetchedTables.length > 0) {
+            setTables(fetchedTables);
+          } else {
+            setTables(loadData<RestaurantTable[]>('chef_tables', INITIAL_TABLES));
+          }
+        } catch (err) {
+          console.warn('Failed to load tables from Spring Boot. Falling back to LocalStorage.', err);
+          setTables(loadData<RestaurantTable[]>('chef_tables', INITIAL_TABLES));
+        }
+      } else {
+        setTables(loadData<RestaurantTable[]>('chef_tables', INITIAL_TABLES));
+      }
+
       if (isWaiterUser) {
         if (ordersSuccess) {
           setApiConnected(true);
@@ -212,6 +233,7 @@ export default function App() {
       setItems(loadData<MenuItem[]>('chef_menu_items', INITIAL_MENU_ITEMS));
       setOrders(loadData<Order[]>('chef_orders', INITIAL_ORDERS));
       setUsers(loadData<User[]>('chef_users', INITIAL_USERS));
+      setTables(loadData<RestaurantTable[]>('chef_tables', INITIAL_TABLES));
       setApiConnected(null);
       setIsApiLoading(false);
     }
@@ -396,6 +418,11 @@ export default function App() {
     saveData('chef_users', updatedUsers);
   };
 
+  const handleTablesChange = (updatedTables: RestaurantTable[]) => {
+    setTables(updatedTables);
+    saveData('chef_tables', updatedTables);
+  };
+
   // Cascade category edits or deletions down to menu items
   const handleItemsCategoryReset = (oldCategoryName: string, newCategoryName: string) => {
     const updatedItems = items.map((item) => {
@@ -504,6 +531,14 @@ export default function App() {
               orders={orders} 
               items={items} 
               categories={categories} 
+            />
+          )}
+
+          {safeTab === 'tables' && isAdmin && (
+            <TablesView 
+              tables={tables}
+              onTablesChange={handleTablesChange}
+              apiEnabled={apiSettings.enabled}
             />
           )}
 

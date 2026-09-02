@@ -1,4 +1,4 @@
-import { MenuItem, Category, Modifier, Order, User } from './types';
+import { MenuItem, Category, Modifier, Order, User, RestaurantTable } from './types';
 
 export const INITIAL_CATEGORIES: Category[] = [
   { id: 'cat-1', name: 'Appetizers' },
@@ -209,6 +209,39 @@ export const INITIAL_USERS: User[] = [
     userRole: 'WAITER',
     userStatus: false,
     createdAt: '2026-08-13T17:53:32'
+  }
+];
+
+export const INITIAL_TABLES: RestaurantTable[] = [
+  {
+    restaurantTableId: 1,
+    tableNumber: 'T-01',
+    capacity: 6,
+    tableStatus: 'FREE'
+  },
+  {
+    restaurantTableId: 2,
+    tableNumber: 'T-02',
+    capacity: 6,
+    tableStatus: 'FREE'
+  },
+  {
+    restaurantTableId: 3,
+    tableNumber: 'T-03',
+    capacity: 6,
+    tableStatus: 'FREE'
+  },
+  {
+    restaurantTableId: 4,
+    tableNumber: 'T-04',
+    capacity: 4,
+    tableStatus: 'OCCUPIED'
+  },
+  {
+    restaurantTableId: 5,
+    tableNumber: 'T-05',
+    capacity: 2,
+    tableStatus: 'FREE'
   }
 ];
 

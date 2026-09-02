@@ -65,6 +65,16 @@ export interface Order {
 
 export type UserRole = 'ADMIN' | 'WAITER';
 
+export type TableStatus = 'FREE' | 'OCCUPIED' | 'RESERVED' | string;
+
+export interface RestaurantTable {
+  restaurantTableId: number;
+  id?: number | string;
+  tableNumber: string;
+  capacity: number;
+  tableStatus: TableStatus;
+}
+
 export interface User {
   userId: number;
   id?: string;
