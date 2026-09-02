@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MenuItem, Modifier, Order, OrderItem, UserRole } from '../types';
+import { MenuItem, Modifier, Order, OrderItem, UserRole, RestaurantTable, TableStatus } from '../types';
 import { Plus, Minus, Clipboard, ShoppingCart, Check, Play, Ban, Sparkles, User, Hash, X, Search, Zap, RefreshCw, Eye, CheckCircle2, Utensils, ShoppingBag, Shield, UserCheck } from 'lucide-react';
 import { apiOrders } from '../api';
 
@@ -7,7 +7,9 @@ interface OrdersViewProps {
   orders: Order[];
   items: MenuItem[];
   modifiers: Modifier[];
+  tables?: RestaurantTable[];
   onOrdersChange: (updatedOrders: Order[]) => void;
+  onTablesChange?: (updatedTables: RestaurantTable[]) => void;
   userRole?: UserRole;
 }
 
@@ -15,16 +17,41 @@ export default function OrdersView({
   orders,
   items,
   modifiers,
+  tables = [],
   onOrdersChange,
+  onTablesChange,
   userRole = 'ADMIN'
 }: OrdersViewProps) {
   const isWaiter = userRole === 'WAITER';
 
+  // Dynamic Free & Occupied tables
+  const freeTablesList = (tables || []).filter(t => t.tableStatus.toUpperCase() === 'FREE');
+  const otherTablesList = (tables || []).filter(t => t.tableStatus.toUpperCase() !== 'FREE');
+
   // Terminal Cart State
   const [cart, setCart] = useState<OrderItem[]>([]);
   const [selectedOrderType, setSelectedOrderType] = useState<'DINE_IN' | 'TAKEAWAY'>('DINE_IN');
-  const [tableNumber, setTableNumber] = useState('Table 01');
+  const [selectedTableId, setSelectedTableId] = useState<number | undefined>(() => {
+    return freeTablesList.length > 0 ? freeTablesList[0].restaurantTableId : (tables[0]?.restaurantTableId || undefined);
+  });
+  const [tableNumber, setTableNumber] = useState<string>(() => {
+    return freeTablesList.length > 0 ? freeTablesList[0].tableNumber : (tables[0]?.tableNumber || 'Table 01');
+  });
   const [customerName, setCustomerName] = useState('');
+
+  // Sync default table when tables list updates
+  useEffect(() => {
+    if (tables && tables.length > 0) {
+      const currentExists = tables.some(t => t.restaurantTableId === selectedTableId || t.tableNumber === tableNumber);
+      if (!currentExists || (!selectedTableId && freeTablesList.length > 0)) {
+        const firstFree = freeTablesList[0] || tables[0];
+        if (firstFree) {
+          setSelectedTableId(firstFree.restaurantTableId);
+          setTableNumber(firstFree.tableNumber);
+        }
+      }
+    }
+  }, [tables]);
   
   // Modifiers Dialog State
   const [activeCustomizingItem, setActiveCustomizingItem] = useState<MenuItem | null>(null);
@@ -215,8 +242,9 @@ export default function OrdersView({
     if (cart.length === 0) return;
 
     const isDineIn = selectedOrderType === 'DINE_IN';
-    const tableIdNum = isDineIn ? (parseInt(tableNumber.replace(/\D/g, '')) || 2) : undefined;
-    const tableStr = isDineIn ? (tableNumber.trim() || `Table 0${tableIdNum}`) : 'Takeaway';
+    const chosenTable = tables.find(t => (selectedTableId && t.restaurantTableId === selectedTableId) || t.tableNumber === tableNumber);
+    const tableIdNum = isDineIn ? (chosenTable ? chosenTable.restaurantTableId : (parseInt(tableNumber.replace(/\D/g, '')) || 1)) : undefined;
+    const tableStr = isDineIn ? (chosenTable ? chosenTable.tableNumber : (tableNumber.trim() || 'Table 01')) : 'Takeaway';
 
     let createdOrder: Order = {
       id: 'order-' + Date.now(),
@@ -243,10 +271,25 @@ export default function OrdersView({
       }
     }
 
+    // Mark table as OCCUPIED
+    if (isDineIn && chosenTable && onTablesChange && tables.length > 0) {
+      const updatedTables = tables.map(t => 
+        t.restaurantTableId === chosenTable.restaurantTableId ? { ...t, tableStatus: 'OCCUPIED' as TableStatus } : t
+      );
+      onTablesChange(updatedTables);
+    }
+
     onOrdersChange([createdOrder, ...orders]);
     setCart([]);
     setCustomerName('');
-    setTableNumber('Table 02');
+    
+    // Choose next free table
+    const remainingFree = tables.filter(t => t.tableStatus.toUpperCase() === 'FREE' && (!chosenTable || t.restaurantTableId !== chosenTable.restaurantTableId));
+    if (remainingFree.length > 0) {
+      setSelectedTableId(remainingFree[0].restaurantTableId);
+      setTableNumber(remainingFree[0].tableNumber);
+    }
+    
     setSelectedOrderType('DINE_IN');
     setDisplayMode('board'); // Return to daily order board
   };
@@ -845,21 +888,68 @@ export default function OrdersView({
                   </div>
 
                   <div className={`grid ${selectedOrderType === 'DINE_IN' ? 'grid-cols-2' : 'grid-cols-1'} gap-3`}>
-                    {/* Table Input (Only shown for DINE_IN) */}
+                    {/* Table Dropdown (Only shown for DINE_IN) */}
                     {selectedOrderType === 'DINE_IN' && (
                       <div className="space-y-1">
-                        <label className="font-mono text-[10px] font-bold text-text-secondary uppercase tracking-wider flex items-center gap-1">
-                          <Hash className="w-3.5 h-3.5" />
-                          <span>Table #</span>
-                        </label>
-                        <input
-                          type="text"
-                          required={selectedOrderType === 'DINE_IN'}
-                          value={tableNumber}
-                          onChange={(e) => setTableNumber(e.target.value)}
-                          className="w-full bg-surf-low border border-border-subtle rounded-lg p-2 text-xs focus:ring-1 focus:ring-brand-secondary outline-none font-sans"
-                          placeholder="e.g. Table 02"
-                        />
+                        <div className="flex items-center justify-between">
+                          <label className="font-mono text-[10px] font-bold text-text-secondary uppercase tracking-wider flex items-center gap-1">
+                            <Hash className="w-3.5 h-3.5" />
+                            <span>Select Table</span>
+                          </label>
+                          {freeTablesList.length > 0 && (
+                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-full border border-emerald-200">
+                              {freeTablesList.length} free
+                            </span>
+                          )}
+                        </div>
+
+                        {tables && tables.length > 0 ? (
+                          <select
+                            value={selectedTableId ?? ''}
+                            onChange={(e) => {
+                              const tableId = parseInt(e.target.value, 10);
+                              const found = tables.find(t => t.restaurantTableId === tableId);
+                              if (found) {
+                                setSelectedTableId(tableId);
+                                setTableNumber(found.tableNumber);
+                              }
+                            }}
+                            className="w-full bg-surf-low border border-border-subtle rounded-lg p-2 text-xs focus:ring-1 focus:ring-brand-secondary outline-none font-sans font-medium text-text-primary"
+                          >
+                            {freeTablesList.length > 0 ? (
+                              <optgroup label="🟢 Available (Free) Tables">
+                                {freeTablesList.map((t) => (
+                                  <option key={t.restaurantTableId} value={t.restaurantTableId}>
+                                    {t.tableNumber} ({t.capacity} seats) — Available
+                                  </option>
+                                ))}
+                              </optgroup>
+                            ) : (
+                              <optgroup label="⚠️ No Free Tables Available">
+                                <option disabled value="">No tables currently marked free</option>
+                              </optgroup>
+                            )}
+
+                            {otherTablesList.length > 0 && (
+                              <optgroup label="🟡 Occupied / Reserved Tables">
+                                {otherTablesList.map((t) => (
+                                  <option key={t.restaurantTableId} value={t.restaurantTableId}>
+                                    {t.tableNumber} ({t.capacity} seats) — {t.tableStatus}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+                          </select>
+                        ) : (
+                          <input
+                            type="text"
+                            required={selectedOrderType === 'DINE_IN'}
+                            value={tableNumber}
+                            onChange={(e) => setTableNumber(e.target.value)}
+                            className="w-full bg-surf-low border border-border-subtle rounded-lg p-2 text-xs focus:ring-1 focus:ring-brand-secondary outline-none font-sans"
+                            placeholder="e.g. Table 02"
+                          />
+                        )}
                       </div>
                     )}
 

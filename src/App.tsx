@@ -521,7 +521,9 @@ export default function App() {
               orders={orders}
               items={items}
               modifiers={modifiers}
+              tables={tables}
               onOrdersChange={handleOrdersChange}
+              onTablesChange={handleTablesChange}
               userRole={currentUser.userRole}
             />
           )}

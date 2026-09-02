@@ -15,8 +15,9 @@ import {
   Check, 
   Hash, 
   Activity,
-  ChevronRight,
-  ShieldAlert
+  ShieldAlert,
+  Sparkles,
+  Info
 } from 'lucide-react';
 import { apiTables } from '../api';
 
@@ -28,8 +29,7 @@ interface TablesViewProps {
 
 export default function TablesView({
   tables,
-  onTablesChange,
-  apiEnabled = false
+  onTablesChange
 }: TablesViewProps) {
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
@@ -44,7 +44,7 @@ export default function TablesView({
   const [inspectTable, setInspectTable] = useState<RestaurantTable | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // "Get by ID" quick lookup
+  // Quick lookup
   const [lookupId, setLookupId] = useState('');
   const [isLookingUp, setIsLookingUp] = useState(false);
 
@@ -60,27 +60,49 @@ export default function TablesView({
   const showNotification = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message });
     setTimeout(() => {
-      setNotification(null);
-    }, 4000);
+      setNotification(null), 3500;
+    });
   };
 
-  // 1. Fetch All Tables (GET /api/tables)
+  // Helper: Find next available table names
+  const getNextAvailableSuggestions = (count: number = 3): string[] => {
+    const existing = new Set(tables.map(t => t.tableNumber.trim().toUpperCase()));
+    const suggestions: string[] = [];
+    for (let i = 1; i <= 99 && suggestions.length < count; i++) {
+      const candidate = i < 10 ? `T-0${i}` : `T-${i}`;
+      if (!existing.has(candidate.toUpperCase())) {
+        suggestions.push(candidate);
+      }
+    }
+    return suggestions;
+  };
+
+  const isTableNameTaken = (name: string, excludeId?: number): boolean => {
+    const normalized = name.trim().toUpperCase();
+    if (!normalized) return false;
+    return tables.some(t => 
+      t.tableNumber.trim().toUpperCase() === normalized && 
+      (excludeId === undefined || t.restaurantTableId !== excludeId)
+    );
+  };
+
+  // 1. Fetch All Tables
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
       const liveList = await apiTables.list();
       if (Array.isArray(liveList)) {
         onTablesChange(liveList);
-        showNotification('success', `Fetched ${liveList.length} tables from server (GET /api/tables).`);
+        showNotification('success', `Tables synchronized successfully.`);
       }
     } catch (err: any) {
-      showNotification('error', `Failed to fetch tables: ${err.message || 'Network error'}`);
+      showNotification('error', `Failed to synchronize tables: ${err.message || 'Connection error'}`);
     } finally {
       setIsRefreshing(false);
     }
   };
 
-  // 2. Get Table By ID (GET /api/tables/{id})
+  // 2. Lookup Table By ID
   const handleLookupById = async (e: React.FormEvent) => {
     e.preventDefault();
     const id = lookupId.trim();
@@ -91,18 +113,17 @@ export default function TablesView({
       const table = await apiTables.getById(id);
       if (table && table.restaurantTableId) {
         setInspectTable(table);
-        showNotification('success', `Found Table #${table.restaurantTableId} (${table.tableNumber})`);
       } else {
-        showNotification('error', `Table ID "${id}" not found.`);
+        showNotification('error', `Table with ID "${id}" was not found.`);
       }
-    } catch (err: any) {
-      showNotification('error', `GET /api/tables/${id} failed: ${err.message || '404 Not Found'}`);
+    } catch {
+      showNotification('error', `Table with ID "${id}" was not found.`);
     } finally {
       setIsLookingUp(false);
     }
   };
 
-  const openInspector = async (table: RestaurantTable) => {
+  const openTableDetails = async (table: RestaurantTable) => {
     try {
       const live = await apiTables.getById(table.restaurantTableId);
       setInspectTable(live || table);
@@ -111,11 +132,11 @@ export default function TablesView({
     }
   };
 
-  // 3. Create Table (POST /api/tables)
+  // 3. Open Create Modal with smart auto-suggestion
   const handleOpenAddModal = () => {
-    const nextNum = tables.length + 1;
-    const formattedNum = nextNum < 10 ? `T-0${nextNum}` : `T-${nextNum}`;
-    setNewTableNumber(formattedNum);
+    const suggestions = getNextAvailableSuggestions(1);
+    const suggestedName = suggestions.length > 0 ? suggestions[0] : `T-${tables.length + 1}`;
+    setNewTableNumber(suggestedName);
     setNewCapacity(4);
     setNewStatus('FREE');
     setIsAddModalOpen(true);
@@ -123,15 +144,21 @@ export default function TablesView({
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTableNumber.trim() || newCapacity <= 0) {
-      showNotification('error', 'Please enter a valid table number and positive capacity.');
+    const trimmedName = newTableNumber.trim();
+    if (!trimmedName || newCapacity <= 0) {
+      showNotification('error', 'Please enter a valid table number and seating capacity.');
+      return;
+    }
+
+    if (isTableNameTaken(trimmedName)) {
+      showNotification('error', `Table number "${trimmedName}" already exists. Please choose a different name.`);
       return;
     }
 
     setIsSubmitting(true);
     try {
       const created = await apiTables.create({
-        tableNumber: newTableNumber.trim(),
+        tableNumber: trimmedName,
         capacity: Number(newCapacity),
         tableStatus: newStatus
       });
@@ -139,15 +166,15 @@ export default function TablesView({
       const updatedList = [created, ...tables.filter(t => t.restaurantTableId !== created.restaurantTableId)];
       onTablesChange(updatedList);
       setIsAddModalOpen(false);
-      showNotification('success', `Table ${created.tableNumber} (#${created.restaurantTableId}) created successfully (201 Created).`);
+      showNotification('success', `Table ${created.tableNumber} added successfully.`);
     } catch (err: any) {
-      showNotification('error', `Failed to create table: ${err.message || 'API error'}`);
+      showNotification('error', `Failed to create table: ${err.message || 'Please try again'}`);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // 4. Update Table (PUT /api/tables/{id})
+  // 4. Update Table
   const handleOpenEditModal = (table: RestaurantTable) => {
     setEditingTable(table);
     setEditTableNumber(table.tableNumber);
@@ -157,7 +184,13 @@ export default function TablesView({
   const handleUpdateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingTable || editCapacity <= 0) {
-      showNotification('error', 'Please enter a valid capacity.');
+      showNotification('error', 'Please enter a valid seating capacity.');
+      return;
+    }
+
+    const trimmedName = editTableNumber.trim();
+    if (trimmedName && isTableNameTaken(trimmedName, editingTable.restaurantTableId)) {
+      showNotification('error', `Table number "${trimmedName}" is already assigned to another table.`);
       return;
     }
 
@@ -167,8 +200,8 @@ export default function TablesView({
         capacity: Number(editCapacity)
       };
 
-      if (editTableNumber.trim() && editTableNumber.trim() !== editingTable.tableNumber) {
-        payload.tableNumber = editTableNumber.trim();
+      if (trimmedName && trimmedName !== editingTable.tableNumber) {
+        payload.tableNumber = trimmedName;
       }
 
       const updated = await apiTables.update(editingTable.restaurantTableId, payload);
@@ -178,15 +211,15 @@ export default function TablesView({
       );
       onTablesChange(updatedList);
       setEditingTable(null);
-      showNotification('success', `Table #${editingTable.restaurantTableId} updated successfully.`);
+      showNotification('success', `Table ${updated.tableNumber || editingTable.tableNumber} updated successfully.`);
     } catch (err: any) {
-      showNotification('error', `Failed to update table: ${err.message || 'API error'}`);
+      showNotification('error', `Failed to update table: ${err.message || 'Please try again'}`);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // 5. Delete Table (DELETE /api/tables/{id})
+  // 5. Delete Table
   const handleDeleteConfirm = async () => {
     if (!deletingTable) return;
 
@@ -195,10 +228,10 @@ export default function TablesView({
       await apiTables.delete(deletingTable.restaurantTableId);
       const updatedList = tables.filter(t => t.restaurantTableId !== deletingTable.restaurantTableId);
       onTablesChange(updatedList);
-      showNotification('success', `Table ${deletingTable.tableNumber} (#${deletingTable.restaurantTableId}) deleted (204 No Content).`);
+      showNotification('success', `Table ${deletingTable.tableNumber} removed successfully.`);
       setDeletingTable(null);
     } catch (err: any) {
-      showNotification('error', `Failed to delete table: ${err.message || 'API error'}`);
+      showNotification('error', `Failed to delete table: ${err.message || 'Please try again'}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -219,6 +252,10 @@ export default function TablesView({
   const occupiedTables = tables.filter(t => t.tableStatus.toUpperCase() === 'OCCUPIED').length;
   const reservedTables = tables.filter(t => t.tableStatus.toUpperCase() === 'RESERVED').length;
   const totalCapacity = tables.reduce((sum, t) => sum + (Number(t.capacity) || 0), 0);
+
+  const addNameIsTaken = isTableNameTaken(newTableNumber);
+  const editNameIsTaken = editingTable ? isTableNameTaken(editTableNumber, editingTable.restaurantTableId) : false;
+  const suggestionsList = getNextAvailableSuggestions(4);
 
   return (
     <div className="px-10 py-6 max-w-7xl mx-auto space-y-8" id="restaurant-tables-view">
@@ -259,7 +296,7 @@ export default function TablesView({
             </span>
           </div>
           <p className="text-text-secondary text-sm font-medium mt-1">
-            Manage floor capacity, table assignments, and real-time status via Spring Boot REST endpoints.
+            Manage dining floor capacity, table arrangements, and real-time availability.
           </p>
         </div>
 
@@ -268,7 +305,6 @@ export default function TablesView({
             onClick={handleRefresh}
             disabled={isRefreshing}
             className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-border-subtle text-text-primary text-xs font-bold hover:bg-surf-low transition-all shadow-xs active-scale"
-            title="GET /api/tables"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-brand-secondary' : 'text-text-secondary'}`} />
             <span>{isRefreshing ? 'Syncing...' : 'Sync Tables'}</span>
@@ -277,7 +313,6 @@ export default function TablesView({
           <button
             onClick={handleOpenAddModal}
             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-primary text-white text-xs font-bold hover:bg-brand-primary/90 transition-all shadow-sm active-scale"
-            title="POST /api/tables"
           >
             <Plus className="w-4 h-4" />
             <span>Create Table</span>
@@ -406,10 +441,9 @@ export default function TablesView({
               type="submit"
               disabled={isLookingUp || !lookupId.trim()}
               className="px-3 py-1.5 bg-surf-container hover:bg-surf-high border border-border-subtle rounded-xl text-xs font-bold text-text-primary flex items-center gap-1 transition-all disabled:opacity-50"
-              title="GET /api/tables/{id}"
             >
               {isLookingUp ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Eye className="w-3 h-3" />}
-              <span>Get By ID</span>
+              <span>Find Table</span>
             </button>
           </form>
         </div>
@@ -423,7 +457,7 @@ export default function TablesView({
           <p className="text-text-secondary text-xs max-w-sm mx-auto mb-4">
             {searchQuery || statusFilter !== 'ALL'
               ? 'No restaurant tables match your active search or status filter.'
-              : 'No tables registered in the database yet. Click below to add one.'}
+              : 'No tables registered in the system yet. Click below to add one.'}
           </p>
           <button
             onClick={handleOpenAddModal}
@@ -438,7 +472,6 @@ export default function TablesView({
           {filteredTables.map((table) => {
             const isFree = table.tableStatus.toUpperCase() === 'FREE';
             const isOccupied = table.tableStatus.toUpperCase() === 'OCCUPIED';
-            const isReserved = table.tableStatus.toUpperCase() === 'RESERVED';
 
             return (
               <div 
@@ -456,7 +489,7 @@ export default function TablesView({
                 <div className="flex items-start justify-between gap-2 mb-4 pt-1">
                   <div>
                     <span className="font-mono text-[10px] font-bold text-text-tertiary">
-                      ID #{table.restaurantTableId}
+                      Table ID #{table.restaurantTableId}
                     </span>
                     <h3 className="font-display font-bold text-xl text-brand-primary mt-0.5">
                       {table.tableNumber}
@@ -472,7 +505,7 @@ export default function TablesView({
                         : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
                     }`}
                   >
-                    {table.tableStatus}
+                    {isFree ? 'Available' : table.tableStatus}
                   </span>
                 </div>
 
@@ -490,11 +523,11 @@ export default function TablesView({
 
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-text-secondary flex items-center gap-1.5">
-                      <Layers className="w-3.5 h-3.5 text-text-tertiary" />
-                      <span>Endpoint:</span>
+                      <Activity className="w-3.5 h-3.5 text-text-tertiary" />
+                      <span>Status:</span>
                     </span>
-                    <span className="font-mono text-[11px] text-text-tertiary">
-                      /api/tables/{table.restaurantTableId}
+                    <span className="text-text-secondary font-medium">
+                      {isFree ? 'Ready for Seating' : isOccupied ? 'Guests Dining' : 'Reserved'}
                     </span>
                   </div>
                 </div>
@@ -502,26 +535,25 @@ export default function TablesView({
                 {/* Card Action Buttons */}
                 <div className="flex items-center justify-between gap-2 pt-3 mt-1">
                   <button
-                    onClick={() => openInspector(table)}
+                    onClick={() => openTableDetails(table)}
                     className="p-1.5 rounded-lg bg-surf-low hover:bg-surf-container text-text-secondary hover:text-brand-primary transition-all text-xs font-semibold flex items-center gap-1"
-                    title="Inspect GET response"
                   >
                     <Eye className="w-3.5 h-3.5" />
-                    <span>Inspect</span>
+                    <span>View Details</span>
                   </button>
 
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => handleOpenEditModal(table)}
                       className="p-1.5 rounded-lg hover:bg-brand-primary/10 text-text-secondary hover:text-brand-primary transition-all"
-                      title="Update Table (PUT /api/tables/{id})"
+                      title="Edit Table"
                     >
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
                     <button
                       onClick={() => setDeletingTable(table)}
                       className="p-1.5 rounded-lg hover:bg-rose-50 text-text-secondary hover:text-rose-600 transition-all"
-                      title="Delete Table (DELETE /api/tables/{id})"
+                      title="Delete Table"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -533,18 +565,18 @@ export default function TablesView({
         </div>
       )}
 
-      {/* MODAL 1: ADD TABLE (POST /api/tables) */}
+      {/* MODAL 1: ADD TABLE */}
       {isAddModalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
           <div className="bg-white border border-border-subtle rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-5">
             <div className="flex items-center justify-between border-b border-border-subtle pb-3">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded-xl bg-brand-primary/10 text-brand-primary">
                   <Plus className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-display font-bold text-lg text-brand-primary">Create Restaurant Table</h3>
-                  <p className="text-text-tertiary text-xs font-mono">POST /api/tables</p>
+                  <h3 className="font-display font-bold text-lg text-brand-primary">Add Restaurant Table</h3>
+                  <p className="text-text-secondary text-xs">Configure table number, seating capacity, and status.</p>
                 </div>
               </div>
               <button 
@@ -557,22 +589,68 @@ export default function TablesView({
 
             <form onSubmit={handleCreateSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-text-primary mb-1">
-                  Table Number <span className="text-rose-500">*</span>
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-text-primary">
+                    Table Number <span className="text-rose-500">*</span>
+                  </label>
+                  {suggestionsList.length > 0 && (
+                    <span className="text-[10px] text-text-tertiary flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-brand-secondary" />
+                      Suggested
+                    </span>
+                  )}
+                </div>
+
                 <input
                   type="text"
                   required
                   value={newTableNumber}
                   onChange={(e) => setNewTableNumber(e.target.value)}
-                  placeholder="e.g. T-07 or Table 07"
-                  className="w-full bg-surf-low border border-border-subtle rounded-xl px-3.5 py-2 text-sm focus:ring-2 focus:ring-brand-secondary/20 focus:border-brand-secondary outline-none text-text-primary font-medium"
+                  placeholder="e.g. T-07"
+                  className={`w-full bg-surf-low border rounded-xl px-3.5 py-2 text-sm focus:ring-2 outline-none text-text-primary font-medium ${
+                    addNameIsTaken 
+                      ? 'border-rose-400 focus:ring-rose-200 focus:border-rose-500' 
+                      : 'border-border-subtle focus:ring-brand-secondary/20 focus:border-brand-secondary'
+                  }`}
                 />
+
+                {/* Validation message */}
+                {addNameIsTaken && (
+                  <p className="text-[11px] text-rose-600 font-medium mt-1.5 flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>Table number "{newTableNumber}" is already in use. Please select or enter an available name.</span>
+                  </p>
+                )}
+
+                {/* Available Suggestions Quick-Click Pills */}
+                {suggestionsList.length > 0 && (
+                  <div className="mt-2.5">
+                    <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider block mb-1">
+                      Available Table Names:
+                    </span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {suggestionsList.map((sug) => (
+                        <button
+                          key={sug}
+                          type="button"
+                          onClick={() => setNewTableNumber(sug)}
+                          className={`px-2.5 py-1 text-xs font-mono font-bold rounded-lg border transition-all ${
+                            newTableNumber.trim().toUpperCase() === sug.toUpperCase()
+                              ? 'bg-brand-secondary text-white border-brand-secondary'
+                              : 'bg-surf-low hover:bg-surf-container border-border-subtle text-text-secondary hover:text-brand-primary'
+                          }`}
+                        >
+                          {sug}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-text-primary mb-1">
-                  Capacity (Seats / Guests) <span className="text-rose-500">*</span>
+                  Seating Capacity (Guests) <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="number"
@@ -587,32 +665,20 @@ export default function TablesView({
 
               <div>
                 <label className="block text-xs font-bold text-text-primary mb-1">
-                  Initial Table Status
+                  Initial Status
                 </label>
                 <select
                   value={newStatus}
                   onChange={(e) => setNewStatus(e.target.value as TableStatus)}
                   className="w-full bg-surf-low border border-border-subtle rounded-xl px-3.5 py-2 text-sm focus:ring-2 focus:ring-brand-secondary/20 focus:border-brand-secondary outline-none text-text-primary font-medium"
                 >
-                  <option value="FREE">FREE (Available)</option>
-                  <option value="OCCUPIED">OCCUPIED</option>
-                  <option value="RESERVED">RESERVED</option>
+                  <option value="FREE">Available (Free)</option>
+                  <option value="OCCUPIED">Occupied</option>
+                  <option value="RESERVED">Reserved</option>
                 </select>
               </div>
 
-              {/* JSON Payload preview */}
-              <div className="bg-surf-low border border-border-subtle rounded-xl p-3 text-[11px] font-mono text-text-secondary space-y-1">
-                <span className="font-bold text-[10px] uppercase text-text-tertiary">Payload Preview:</span>
-                <pre className="text-brand-primary">
-{JSON.stringify({
-  tableNumber: newTableNumber || 'T-07',
-  capacity: Number(newCapacity),
-  tableStatus: newStatus
-}, null, 2)}
-                </pre>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-2">
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-border-subtle">
                 <button
                   type="button"
                   onClick={() => setIsAddModalOpen(false)}
@@ -622,11 +688,11 @@ export default function TablesView({
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || addNameIsTaken}
                   className="px-5 py-2 text-xs font-bold bg-brand-primary text-white rounded-xl hover:bg-brand-primary/90 transition-all flex items-center gap-1.5 shadow-sm disabled:opacity-50"
                 >
                   {isSubmitting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                  <span>Create Table</span>
+                  <span>Save Table</span>
                 </button>
               </div>
             </form>
@@ -634,20 +700,20 @@ export default function TablesView({
         </div>
       )}
 
-      {/* MODAL 2: EDIT TABLE (PUT /api/tables/{id}) */}
+      {/* MODAL 2: EDIT TABLE */}
       {editingTable && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
           <div className="bg-white border border-border-subtle rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-5">
             <div className="flex items-center justify-between border-b border-border-subtle pb-3">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded-xl bg-amber-50 text-amber-700">
                   <Edit2 className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="font-display font-bold text-lg text-brand-primary">
-                    Update Table #{editingTable.restaurantTableId}
+                    Edit Table {editingTable.tableNumber}
                   </h3>
-                  <p className="text-text-tertiary text-xs font-mono">PUT /api/tables/{editingTable.restaurantTableId}</p>
+                  <p className="text-text-secondary text-xs">Update table number and seating capacity.</p>
                 </div>
               </div>
               <button 
@@ -661,21 +727,32 @@ export default function TablesView({
             <form onSubmit={handleUpdateSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-text-primary mb-1">
-                  Table Number (Optional)
+                  Table Number
                 </label>
                 <input
                   type="text"
                   value={editTableNumber}
                   onChange={(e) => setEditTableNumber(e.target.value)}
-                  placeholder="e.g. T-077"
-                  className="w-full bg-surf-low border border-border-subtle rounded-xl px-3.5 py-2 text-sm focus:ring-2 focus:ring-brand-secondary/20 focus:border-brand-secondary outline-none text-text-primary font-medium"
+                  placeholder="e.g. T-07"
+                  className={`w-full bg-surf-low border rounded-xl px-3.5 py-2 text-sm focus:ring-2 outline-none text-text-primary font-medium ${
+                    editNameIsTaken 
+                      ? 'border-rose-400 focus:ring-rose-200 focus:border-rose-500' 
+                      : 'border-border-subtle focus:ring-brand-secondary/20 focus:border-brand-secondary'
+                  }`}
                 />
-                <p className="text-[11px] text-text-tertiary mt-1">Leave unchanged to keep original number ({editingTable.tableNumber}).</p>
+                {editNameIsTaken ? (
+                  <p className="text-[11px] text-rose-600 font-medium mt-1.5 flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>Table number "{editTableNumber}" is already in use by another table.</span>
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-text-tertiary mt-1">Current table number: {editingTable.tableNumber}</p>
+                )}
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-text-primary mb-1">
-                  Capacity (Seats) <span className="text-rose-500">*</span>
+                  Seating Capacity (Guests) <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="number"
@@ -688,18 +765,7 @@ export default function TablesView({
                 />
               </div>
 
-              {/* JSON Payload preview */}
-              <div className="bg-surf-low border border-border-subtle rounded-xl p-3 text-[11px] font-mono text-text-secondary space-y-1">
-                <span className="font-bold text-[10px] uppercase text-text-tertiary">Payload Preview:</span>
-                <pre className="text-brand-primary">
-{JSON.stringify({
-  capacity: Number(editCapacity),
-  ...(editTableNumber.trim() ? { tableNumber: editTableNumber.trim() } : {})
-}, null, 2)}
-                </pre>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-2">
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-border-subtle">
                 <button
                   type="button"
                   onClick={() => setEditingTable(null)}
@@ -709,7 +775,7 @@ export default function TablesView({
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || editNameIsTaken}
                   className="px-5 py-2 text-xs font-bold bg-brand-primary text-white rounded-xl hover:bg-brand-primary/90 transition-all flex items-center gap-1.5 shadow-sm disabled:opacity-50"
                 >
                   {isSubmitting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
@@ -721,7 +787,7 @@ export default function TablesView({
         </div>
       )}
 
-      {/* MODAL 3: DELETE CONFIRMATION (DELETE /api/tables/{id}) */}
+      {/* MODAL 3: DELETE CONFIRMATION */}
       {deletingTable && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
           <div className="bg-white border border-border-subtle rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4">
@@ -730,11 +796,10 @@ export default function TablesView({
             </div>
 
             <div className="text-center space-y-1">
-              <h3 className="font-display font-bold text-lg text-brand-primary">Delete Table?</h3>
-              <p className="text-xs text-text-secondary">
-                Are you sure you want to permanently delete table <strong className="text-brand-primary">{deletingTable.tableNumber}</strong> (ID #{deletingTable.restaurantTableId})?
+              <h3 className="font-display font-bold text-lg text-brand-primary">Remove Table</h3>
+              <p className="text-xs text-text-secondary leading-relaxed">
+                Are you sure you want to remove <strong className="text-brand-primary">{deletingTable.tableNumber}</strong> from the floor layout?
               </p>
-              <p className="font-mono text-[11px] text-text-tertiary">DELETE /api/tables/{deletingTable.restaurantTableId}</p>
             </div>
 
             <div className="flex items-center justify-center gap-3 pt-2">
@@ -752,27 +817,27 @@ export default function TablesView({
                 className="px-5 py-2 text-xs font-bold bg-rose-600 text-white rounded-xl hover:bg-rose-700 transition-all flex items-center gap-1.5 shadow-sm disabled:opacity-50"
               >
                 {isSubmitting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                <span>Confirm Delete</span>
+                <span>Delete Table</span>
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL 4: TABLE INSPECTOR (GET /api/tables/{id}) */}
+      {/* MODAL 4: TABLE DETAILS */}
       {inspectTable && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-          <div className="bg-white border border-border-subtle rounded-2xl p-6 max-w-lg w-full shadow-2xl space-y-4">
+          <div className="bg-white border border-border-subtle rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-5">
             <div className="flex items-center justify-between border-b border-border-subtle pb-3">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded-xl bg-brand-secondary/10 text-brand-secondary">
                   <Layers className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="font-display font-bold text-lg text-brand-primary">
-                    Table #{inspectTable.restaurantTableId} Details
+                    Table Details: {inspectTable.tableNumber}
                   </h3>
-                  <p className="text-text-tertiary text-xs font-mono">GET /api/tables/{inspectTable.restaurantTableId}</p>
+                  <p className="text-text-secondary text-xs">Floor assignment and seating overview.</p>
                 </div>
               </div>
               <button 
@@ -783,43 +848,73 @@ export default function TablesView({
               </button>
             </div>
 
-            {/* Visual Card Summary */}
-            <div className="grid grid-cols-3 gap-3">
-              <div className="bg-surf-low border border-border-subtle rounded-xl p-3 text-center">
-                <span className="text-[10px] uppercase font-bold text-text-tertiary block">Table Number</span>
-                <span className="font-display font-bold text-base text-brand-primary mt-1 block">
+            {/* Clean summary cards */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-surf-low border border-border-subtle rounded-xl p-3.5">
+                <span className="text-[10px] uppercase font-bold text-text-tertiary block">Table Name</span>
+                <span className="font-display font-bold text-lg text-brand-primary mt-1 block">
                   {inspectTable.tableNumber}
                 </span>
               </div>
-              <div className="bg-surf-low border border-border-subtle rounded-xl p-3 text-center">
-                <span className="text-[10px] uppercase font-bold text-text-tertiary block">Capacity</span>
-                <span className="font-display font-bold text-base text-brand-primary mt-1 block">
-                  {inspectTable.capacity} Seats
+
+              <div className="bg-surf-low border border-border-subtle rounded-xl p-3.5">
+                <span className="text-[10px] uppercase font-bold text-text-tertiary block">Seating Capacity</span>
+                <span className="font-display font-bold text-lg text-brand-primary mt-1 block">
+                  {inspectTable.capacity} Guests
                 </span>
               </div>
-              <div className="bg-surf-low border border-border-subtle rounded-xl p-3 text-center">
-                <span className="text-[10px] uppercase font-bold text-text-tertiary block">Status</span>
-                <span className="font-mono text-xs font-bold text-emerald-600 mt-1 block">
-                  {inspectTable.tableStatus}
+
+              <div className="bg-surf-low border border-border-subtle rounded-xl p-3.5">
+                <span className="text-[10px] uppercase font-bold text-text-tertiary block">Availability</span>
+                <span className={`font-mono text-xs font-bold mt-1.5 inline-block px-2 py-0.5 rounded-md ${
+                  inspectTable.tableStatus.toUpperCase() === 'FREE'
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : inspectTable.tableStatus.toUpperCase() === 'OCCUPIED'
+                    ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                    : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                }`}>
+                  {inspectTable.tableStatus.toUpperCase() === 'FREE' ? 'Available' : inspectTable.tableStatus}
+                </span>
+              </div>
+
+              <div className="bg-surf-low border border-border-subtle rounded-xl p-3.5">
+                <span className="text-[10px] uppercase font-bold text-text-tertiary block">System ID</span>
+                <span className="font-mono text-xs font-bold text-text-secondary mt-1.5 block">
+                  #{inspectTable.restaurantTableId}
                 </span>
               </div>
             </div>
 
-            {/* Raw JSON Response */}
-            <div className="space-y-1">
-              <span className="text-[11px] font-bold text-text-secondary uppercase">API JSON Response (200 OK):</span>
-              <pre className="bg-surf-low border border-border-subtle rounded-xl p-3 text-xs font-mono text-brand-primary overflow-x-auto">
-{JSON.stringify(inspectTable, null, 2)}
-              </pre>
+            <div className="bg-surf-low/60 border border-border-subtle/80 rounded-xl p-3 flex items-start gap-2.5 text-xs text-text-secondary">
+              <Info className="w-4 h-4 text-brand-secondary shrink-0 mt-0.5" />
+              <p className="leading-relaxed">
+                {inspectTable.tableStatus.toUpperCase() === 'FREE' 
+                  ? 'This table is currently vacant and ready for new guest dining orders.'
+                  : inspectTable.tableStatus.toUpperCase() === 'OCCUPIED'
+                  ? 'This table has an active order in progress and is currently occupied by guests.'
+                  : 'This table has a pending reservation.'}
+              </p>
             </div>
 
-            <div className="flex items-center justify-end pt-2">
+            <div className="flex items-center justify-end gap-3 pt-2 border-t border-border-subtle">
+              <button
+                type="button"
+                onClick={() => {
+                  const target = inspectTable;
+                  setInspectTable(null);
+                  handleOpenEditModal(target);
+                }}
+                className="px-4 py-2 text-xs font-bold bg-surf-container text-text-primary rounded-xl hover:bg-surf-high transition-all flex items-center gap-1.5"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+                <span>Edit Table</span>
+              </button>
               <button
                 type="button"
                 onClick={() => setInspectTable(null)}
                 className="px-5 py-2 text-xs font-bold bg-brand-primary text-white rounded-xl hover:bg-brand-primary/90 transition-all shadow-sm"
               >
-                Close Inspector
+                Done
               </button>
             </div>
           </div>
