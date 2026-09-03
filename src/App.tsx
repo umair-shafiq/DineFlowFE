@@ -220,20 +220,15 @@ export default function App() {
         setUsers(loadData<User[]>('chef_users', INITIAL_USERS));
       }
 
-      // 5. Fetch restaurant tables (ADMIN only - GET /api/tables)
-      if (!isWaiterUser) {
-        try {
-          const fetchedTables = await apiTables.list();
-          if (Array.isArray(fetchedTables) && fetchedTables.length > 0) {
-            setTables(fetchedTables);
-          } else {
-            setTables(loadData<RestaurantTable[]>('chef_tables', INITIAL_TABLES));
-          }
-        } catch (err) {
-          console.warn('Failed to load tables from Spring Boot. Falling back to LocalStorage.', err);
+      // 5. Fetch restaurant tables (GET /api/tables)
+      try {
+        const fetchedTables = await apiTables.list();
+        if (Array.isArray(fetchedTables) && fetchedTables.length > 0) {
+          setTables(fetchedTables);
+        } else {
           setTables(loadData<RestaurantTable[]>('chef_tables', INITIAL_TABLES));
         }
-      } else {
+      } catch (err) {
         setTables(loadData<RestaurantTable[]>('chef_tables', INITIAL_TABLES));
       }
 
