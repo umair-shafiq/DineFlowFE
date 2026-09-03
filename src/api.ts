@@ -24,16 +24,36 @@ const DEFAULT_SETTINGS: SpringBootSettings = {
   tablesPath: '/api/tables'
 };
 
-// In-memory JWT token storage (NOT saved in localStorage or sessionStorage)
+// JWT token storage with localStorage persistence across page reloads
+const JWT_STORAGE_KEY = 'dineflow_jwt_token';
 let inMemoryJwtToken: string | null = null;
 let onUnauthorizedCallback: ((message?: string) => void) | null = null;
 
 export function setAuthToken(token: string | null): void {
   inMemoryJwtToken = token;
+  try {
+    if (token) {
+      localStorage.setItem(JWT_STORAGE_KEY, token);
+    } else {
+      localStorage.removeItem(JWT_STORAGE_KEY);
+    }
+  } catch {
+    // ignore storage quota/security errors
+  }
 }
 
 export function getAuthToken(): string | null {
-  return inMemoryJwtToken;
+  if (inMemoryJwtToken) return inMemoryJwtToken;
+  try {
+    const stored = localStorage.getItem(JWT_STORAGE_KEY);
+    if (stored) {
+      inMemoryJwtToken = stored;
+      return stored;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
 }
 
 export function setOnUnauthorized(callback: ((message?: string) => void) | null): void {

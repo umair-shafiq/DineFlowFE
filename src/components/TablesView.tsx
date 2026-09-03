@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { RestaurantTable, TableStatus } from '../types';
 import { 
   Plus, 
@@ -85,6 +85,23 @@ export default function TablesView({
       (excludeId === undefined || t.restaurantTableId !== excludeId)
     );
   };
+
+  // Auto-refresh tables from backend on view mount to ensure real-time database sync
+  useEffect(() => {
+    let isMounted = true;
+    apiTables.list()
+      .then((liveList) => {
+        if (isMounted && Array.isArray(liveList)) {
+          onTablesChange(liveList);
+        }
+      })
+      .catch((err) => {
+        console.warn('Silent tables initial load failed, using cached state:', err);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // 1. Fetch All Tables
   const handleRefresh = async () => {

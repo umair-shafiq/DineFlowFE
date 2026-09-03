@@ -36,11 +36,35 @@ import {
 } from './api';
 
 export default function App() {
-  // In-Memory Authentication State (No localStorage or sessionStorage used for JWT/Auth per requirement)
-  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+  // Authentication State with localStorage persistence across page reloads
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
+    try {
+      const savedUser = localStorage.getItem('dineflow_auth_user');
+      const savedToken = localStorage.getItem('dineflow_jwt_token');
+      if (savedUser) {
+        const parsed = JSON.parse(savedUser) as AuthUser;
+        if (savedToken && !parsed.token) {
+          parsed.token = savedToken;
+        }
+        if (parsed.token) {
+          setAuthToken(parsed.token);
+        }
+        return parsed;
+      }
+    } catch {
+      // fallback to null
+    }
+    return null;
+  });
 
   // Navigation & Search State
-  const [currentTab, setCurrentTab] = useState<string>('orders');
+  const [currentTab, setCurrentTab] = useState<string>(() => {
+    try {
+      const savedTab = localStorage.getItem('dineflow_active_tab');
+      if (savedTab) return savedTab;
+    } catch {}
+    return 'orders';
+  });
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Core Data States
@@ -63,15 +87,34 @@ export default function App() {
   // Intercept 401/403 session expiration
   useEffect(() => {
     setOnUnauthorizedCallback(() => {
-      console.warn('Session expired or unauthorized (401/403). Resetting memory auth state.');
+      console.warn('Session expired or unauthorized (401/403). Resetting auth state.');
       setCurrentUser(null);
       setAuthToken(null);
+      try {
+        localStorage.removeItem('dineflow_auth_user');
+        localStorage.removeItem('dineflow_jwt_token');
+      } catch {}
     });
   }, []);
+
+  // Save current tab when it changes
+  const handleTabChange = (tab: string) => {
+    setCurrentTab(tab);
+    try {
+      localStorage.setItem('dineflow_active_tab', tab);
+    } catch {}
+  };
 
   // Handle successful login and role-based redirect
   const handleLoginSuccess = useCallback((user: AuthUser) => {
     setCurrentUser(user);
+    try {
+      localStorage.setItem('dineflow_auth_user', JSON.stringify(user));
+      if (user.token) {
+        setAuthToken(user.token);
+      }
+    } catch {}
+
     const activeSettings: SpringBootSettings = {
       ...getApiSettings(),
       enabled: true
@@ -79,13 +122,11 @@ export default function App() {
     setApiSettings(activeSettings);
     saveApiSettings(activeSettings);
 
-    if (user.userRole === 'ADMIN') {
-      // "ADMIN" → redirect to dashboard
-      setCurrentTab('reports');
-    } else {
-      // "WAITER" → redirect to orders
-      setCurrentTab('orders');
-    }
+    const targetTab = user.userRole === 'ADMIN' ? 'reports' : 'orders';
+    setCurrentTab(targetTab);
+    try {
+      localStorage.setItem('dineflow_active_tab', targetTab);
+    } catch {}
 
     // Immediately fetch live orders & data based on user role
     loadAllData(activeSettings, user);
@@ -96,6 +137,11 @@ export default function App() {
     setAuthToken(null);
     setCurrentUser(null);
     setCurrentTab('orders');
+    try {
+      localStorage.removeItem('dineflow_auth_user');
+      localStorage.removeItem('dineflow_jwt_token');
+      localStorage.removeItem('dineflow_active_tab');
+    } catch {}
   }, []);
 
   // Initialize and load persistent data or fetch from Spring Boot REST API
@@ -436,7 +482,7 @@ export default function App() {
 
   // Shortcut from header to trigger opening the new menu item modal
   const handleAddShortcutClick = () => {
-    setCurrentTab('menu-items');
+    handleTabChange('menu-items');
     setTimeout(() => {
       setIsAddModalOpen(true);
     }, 50);
@@ -463,7 +509,7 @@ export default function App() {
       {/* Persistent Left Sidebar Navigation */}
       <Sidebar 
         currentTab={safeTab} 
-        onTabChange={setCurrentTab} 
+        onTabChange={handleTabChange} 
         currentUser={currentUser}
         onLogout={handleLogout}
       />
@@ -474,7 +520,7 @@ export default function App() {
         {/* Persistent Top Navbar with Search & Shortcuts */}
         <Header
           currentTab={safeTab}
-          onTabChange={setCurrentTab}
+          onTabChange={handleTabChange}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           onAddShortcutClick={handleAddShortcutClick}

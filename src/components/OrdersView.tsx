@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { MenuItem, Modifier, Order, OrderItem, UserRole, RestaurantTable, TableStatus } from '../types';
 import { Plus, Minus, Clipboard, ShoppingCart, Check, Play, Ban, Sparkles, User, Hash, X, Search, Zap, RefreshCw, Eye, CheckCircle2, Utensils, ShoppingBag, Shield, UserCheck } from 'lucide-react';
-import { apiOrders } from '../api';
+import { apiOrders, apiTables } from '../api';
 
 interface OrdersViewProps {
   orders: Order[];
@@ -300,9 +300,35 @@ export default function OrdersView({
       : nextStatus === 'completed' ? 'COMPLETED' 
       : nextStatus === 'cancelled' ? 'CANCELLED' : 'PLACED';
 
+    const targetOrder = orders.find(ord => ord.id === orderId || String(ord.orderId) === String(orderId));
+
+    // Release table to FREE on frontend immediately if order is completed or cancelled
+    if ((nextStatus === 'completed' || nextStatus === 'cancelled') && targetOrder && onTablesChange && tables.length > 0) {
+      const updatedTables = tables.map(t => {
+        const matchId = targetOrder.restaurantTableId && Number(t.restaurantTableId) === Number(targetOrder.restaurantTableId);
+        const matchNum = targetOrder.tableNumber && t.tableNumber.trim().toLowerCase() === targetOrder.tableNumber.trim().toLowerCase();
+        if (matchId || matchNum) {
+          return { ...t, tableStatus: 'FREE' as TableStatus };
+        }
+        return t;
+      });
+      onTablesChange(updatedTables);
+    }
+
     if (!isWaiter) {
       try {
         await apiOrders.updateStatus(orderId, backendStatus);
+        // Refresh tables list from Spring Boot backend to stay 100% in sync with DB
+        if (nextStatus === 'completed' || nextStatus === 'cancelled') {
+          try {
+            const liveTables = await apiTables.list();
+            if (Array.isArray(liveTables) && onTablesChange) {
+              onTablesChange(liveTables);
+            }
+          } catch {
+            // silent fallback
+          }
+        }
       } catch (err) {
         console.warn('Status update API error:', err);
       }
