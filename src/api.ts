@@ -1,4 +1,4 @@
-import { MenuItem, Category, Order, OrderItem, User, UserRole, AuthUser, RestaurantTable, TableStatus } from './types';
+import { MenuItem, Category, Order, OrderItem, User, UserRole, AuthUser, RestaurantTable, TableStatus, Reservation, ReservationStatus, ReservationRequestDto } from './types';
 
 export interface SpringBootSettings {
   enabled: boolean;
@@ -9,6 +9,7 @@ export interface SpringBootSettings {
   usersPath?: string;
   authPath?: string;
   tablesPath?: string;
+  reservationsPath?: string;
 }
 
 const SETTINGS_KEY = 'spring_boot_connector_settings';
@@ -21,7 +22,8 @@ const DEFAULT_SETTINGS: SpringBootSettings = {
   ordersPath: '/api/orders',
   usersPath: '/api/users',
   authPath: '/api/auth',
-  tablesPath: '/api/tables'
+  tablesPath: '/api/tables',
+  reservationsPath: '/api/reservations'
 };
 
 // JWT token storage with localStorage persistence across page reloads
@@ -79,6 +81,12 @@ export function getApiSettings(): SpringBootSettings {
       }
       if (!parsed.authPath) {
         parsed.authPath = '/api/auth';
+      }
+      if (!parsed.tablesPath) {
+        parsed.tablesPath = '/api/tables';
+      }
+      if (!parsed.reservationsPath) {
+        parsed.reservationsPath = '/api/reservations';
       }
       if (parsed.enabled === undefined) {
         parsed.enabled = true;
@@ -790,6 +798,93 @@ export const apiTables = {
   delete: async (id: number | string): Promise<void> => {
     const settings = getApiSettings();
     const basePath = (settings.tablesPath || '/api/tables').replace(/\/$/, '');
+    await apiRequest<any>(`${basePath}/${id}`, 'DELETE');
+  }
+};
+
+// Normalizer for Reservation
+function normalizeReservation(raw: any): Reservation {
+  if (!raw) return raw;
+  const resId = Number(raw.reservationId || raw.id || 0);
+  const table = raw.restaurantTable ? normalizeTable(raw.restaurantTable) : undefined;
+  const tableId = raw.restaurantTableId ? Number(raw.restaurantTableId) : (table?.restaurantTableId);
+  return {
+    reservationId: resId,
+    id: resId,
+    customerName: String(raw.customerName || ''),
+    customerPhone: String(raw.customerPhone || ''),
+    numberOfGuests: Number(raw.numberOfGuests || 1),
+    reservationDateTime: String(raw.reservationDateTime || ''),
+    restaurantTableId: tableId,
+    restaurantTable: table,
+    status: (String(raw.status || raw.reservationStatus || 'PENDING').toUpperCase()) as ReservationStatus,
+    createdAt: raw.createdAt ? String(raw.createdAt) : undefined
+  };
+}
+
+// Reservations REST API
+export const apiReservations = {
+  list: async (): Promise<Reservation[]> => {
+    const settings = getApiSettings();
+    const path = settings.reservationsPath || '/api/reservations';
+    const list = await apiRequest<any[]>(path, 'GET');
+    return Array.isArray(list) ? list.map(normalizeReservation) : [];
+  },
+
+  getById: async (id: number | string): Promise<Reservation> => {
+    const settings = getApiSettings();
+    const basePath = (settings.reservationsPath || '/api/reservations').replace(/\/$/, '');
+    const res = await apiRequest<any>(`${basePath}/${id}`, 'GET');
+    return normalizeReservation(res);
+  },
+
+  create: async (payload: ReservationRequestDto): Promise<Reservation> => {
+    const settings = getApiSettings();
+    const path = settings.reservationsPath || '/api/reservations';
+    const body: Record<string, any> = {
+      restaurantTableId: Number(payload.restaurantTableId),
+      customerName: payload.customerName?.trim(),
+      customerPhone: payload.customerPhone?.trim(),
+      numberOfGuests: Number(payload.numberOfGuests),
+      reservationDateTime: payload.reservationDateTime
+    };
+    const res = await apiRequest<any>(path, 'POST', body);
+    return normalizeReservation(res);
+  },
+
+  update: async (id: number | string, payload: Partial<ReservationRequestDto>): Promise<Reservation> => {
+    const settings = getApiSettings();
+    const basePath = (settings.reservationsPath || '/api/reservations').replace(/\/$/, '');
+    const body: Record<string, any> = {};
+    if (payload.restaurantTableId !== undefined) {
+      body.restaurantTableId = Number(payload.restaurantTableId);
+    }
+    if (payload.customerName !== undefined) {
+      body.customerName = payload.customerName.trim();
+    }
+    if (payload.customerPhone !== undefined) {
+      body.customerPhone = payload.customerPhone.trim();
+    }
+    if (payload.numberOfGuests !== undefined) {
+      body.numberOfGuests = Number(payload.numberOfGuests);
+    }
+    if (payload.reservationDateTime !== undefined) {
+      body.reservationDateTime = payload.reservationDateTime;
+    }
+    const res = await apiRequest<any>(`${basePath}/${id}`, 'PUT', body);
+    return normalizeReservation(res);
+  },
+
+  updateStatus: async (id: number | string, status: ReservationStatus): Promise<Reservation> => {
+    const settings = getApiSettings();
+    const basePath = (settings.reservationsPath || '/api/reservations').replace(/\/$/, '');
+    const res = await apiRequest<any>(`${basePath}/${id}/status?reservationStatus=${status}`, 'PATCH');
+    return normalizeReservation(res);
+  },
+
+  delete: async (id: number | string): Promise<void> => {
+    const settings = getApiSettings();
+    const basePath = (settings.reservationsPath || '/api/reservations').replace(/\/$/, '');
     await apiRequest<any>(`${basePath}/${id}`, 'DELETE');
   }
 };

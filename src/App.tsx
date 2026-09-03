@@ -9,9 +9,10 @@ import ReportsView from './components/ReportsView';
 import SupportView from './components/SupportView';
 import UsersView from './components/UsersView';
 import TablesView from './components/TablesView';
+import ReservationsView from './components/ReservationsView';
 import LoginView from './components/LoginView';
 
-import { MenuItem, Category, Modifier, Order, AuthUser, User, RestaurantTable } from './types';
+import { MenuItem, Category, Modifier, Order, AuthUser, User, RestaurantTable, Reservation } from './types';
 import {
   INITIAL_MENU_ITEMS,
   INITIAL_CATEGORIES,
@@ -19,6 +20,7 @@ import {
   INITIAL_ORDERS,
   INITIAL_USERS,
   INITIAL_TABLES,
+  INITIAL_RESERVATIONS,
   loadData,
   saveData
 } from './data';
@@ -31,6 +33,7 @@ import {
   apiOrders,
   apiUsers,
   apiTables,
+  apiReservations,
   setAuthToken,
   setOnUnauthorizedCallback
 } from './api';
@@ -74,6 +77,7 @@ export default function App() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [tables, setTables] = useState<RestaurantTable[]>([]);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
 
   // Spring Boot Integration States
   const [apiSettings, setApiSettings] = useState<SpringBootSettings>(getApiSettings());
@@ -232,6 +236,18 @@ export default function App() {
         setTables(loadData<RestaurantTable[]>('chef_tables', INITIAL_TABLES));
       }
 
+      // 6. Fetch reservations (GET /api/reservations)
+      try {
+        const fetchedReservations = await apiReservations.list();
+        if (Array.isArray(fetchedReservations) && fetchedReservations.length > 0) {
+          setReservations(fetchedReservations);
+        } else {
+          setReservations(loadData<Reservation[]>('chef_reservations', INITIAL_RESERVATIONS));
+        }
+      } catch (err) {
+        setReservations(loadData<Reservation[]>('chef_reservations', INITIAL_RESERVATIONS));
+      }
+
       if (isWaiterUser) {
         if (ordersSuccess) {
           setApiConnected(true);
@@ -275,6 +291,7 @@ export default function App() {
       setOrders(loadData<Order[]>('chef_orders', INITIAL_ORDERS));
       setUsers(loadData<User[]>('chef_users', INITIAL_USERS));
       setTables(loadData<RestaurantTable[]>('chef_tables', INITIAL_TABLES));
+      setReservations(loadData<Reservation[]>('chef_reservations', INITIAL_RESERVATIONS));
       setApiConnected(null);
       setIsApiLoading(false);
     }
@@ -464,6 +481,11 @@ export default function App() {
     saveData('chef_tables', updatedTables);
   };
 
+  const handleReservationsChange = (updatedReservations: Reservation[]) => {
+    setReservations(updatedReservations);
+    saveData('chef_reservations', updatedReservations);
+  };
+
   // Cascade category edits or deletions down to menu items
   const handleItemsCategoryReset = (oldCategoryName: string, newCategoryName: string) => {
     const updatedItems = items.map((item) => {
@@ -574,6 +596,16 @@ export default function App() {
               orders={orders} 
               items={items} 
               categories={categories} 
+            />
+          )}
+
+          {safeTab === 'reservations' && isAdmin && (
+            <ReservationsView
+              reservations={reservations}
+              tables={tables}
+              onReservationsChange={handleReservationsChange}
+              onTablesChange={handleTablesChange}
+              userRole={currentUser.userRole}
             />
           )}
 

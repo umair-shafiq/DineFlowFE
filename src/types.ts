@@ -86,10 +86,33 @@ export interface User {
   password?: string;
 }
 
+export type ReservationStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED';
+
+export interface Reservation {
+  reservationId: number;
+  id?: number | string;
+  customerName: string;
+  customerPhone: string;
+  numberOfGuests: number;
+  reservationDateTime: string;
+  restaurantTableId?: number;
+  restaurantTable?: RestaurantTable;
+  status: ReservationStatus;
+  createdAt?: string;
+}
+
 export interface AuthUser {
   token: string;
   email: string;
   userRole: UserRole;
   fullName?: string;
   userId?: number;
+}
+
+export interface ReservationRequestDto {
+  restaurantTableId?: number;
+  customerName?: string;
+  customerPhone?: string;
+  numberOfGuests?: number;
+  reservationDateTime?: string;
 }

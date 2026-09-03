@@ -11,7 +11,8 @@ import {
   Users, 
   Shield, 
   UserCheck,
-  LayoutGrid
+  LayoutGrid,
+  CalendarClock
 } from 'lucide-react';
 import { AuthUser } from '../types';
 
@@ -29,6 +30,7 @@ export default function Sidebar({ currentTab, onTabChange, currentUser, onLogout
   const adminMenuItems = [
     { id: 'reports', label: 'Dashboard', icon: BarChart3 },
     { id: 'orders', label: 'Orders Terminal', icon: ClipboardList },
+    { id: 'reservations', label: 'Reservations', icon: CalendarClock },
     { id: 'tables', label: 'Table Management', icon: LayoutGrid },
     { id: 'menu-items', label: 'Menu Items', icon: UtensilsCrossed },
     { id: 'categories', label: 'Categories', icon: Layers },

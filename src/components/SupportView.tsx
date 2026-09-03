@@ -43,6 +43,7 @@ export default function SupportView({
   const [menuItemsPathInput, setMenuItemsPathInput] = useState(apiSettings.menuItemsPath);
   const [ordersPathInput, setOrdersPathInput] = useState(apiSettings.ordersPath || '/api/orders');
   const [tablesPathInput, setTablesPathInput] = useState(apiSettings.tablesPath || '/api/tables');
+  const [reservationsPathInput, setReservationsPathInput] = useState(apiSettings.reservationsPath || '/api/reservations');
 
   // Testing & seeding states
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -57,6 +58,7 @@ export default function SupportView({
     setMenuItemsPathInput(apiSettings.menuItemsPath);
     setOrdersPathInput(apiSettings.ordersPath || '/api/orders');
     setTablesPathInput(apiSettings.tablesPath || '/api/tables');
+    setReservationsPathInput(apiSettings.reservationsPath || '/api/reservations');
   }, [apiSettings]);
 
   // Load scratchpad notes on load
@@ -88,7 +90,8 @@ export default function SupportView({
       categoriesPath: categoriesPathInput.trim() || '/api/categories',
       menuItemsPath: menuItemsPathInput.trim() || '/api/menu-items',
       ordersPath: ordersPathInput.trim() || '/api/orders',
-      tablesPath: tablesPathInput.trim() || '/api/tables'
+      tablesPath: tablesPathInput.trim() || '/api/tables',
+      reservationsPath: reservationsPathInput.trim() || '/api/reservations'
     };
     onApiSettingsChange(newSettings);
     setTestResult(null);
@@ -306,7 +309,7 @@ export default function SupportView({
 
               {/* Input details */}
               <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div className="space-y-1.5">
                     <label className="font-mono text-[10px] font-bold text-text-secondary uppercase tracking-wider block">
                       Server Base URL
@@ -368,6 +371,19 @@ export default function SupportView({
                       value={tablesPathInput}
                       onChange={(e) => setTablesPathInput(e.target.value)}
                       placeholder="/api/tables"
+                      className="w-full bg-surf-low border border-border-subtle rounded-lg px-3.5 py-2 text-sm focus:ring-1 focus:ring-brand-secondary outline-none text-text-primary"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="font-mono text-[10px] font-bold text-text-secondary uppercase tracking-wider block">
+                      Reservations Path
+                    </label>
+                    <input
+                      type="text"
+                      value={reservationsPathInput}
+                      onChange={(e) => setReservationsPathInput(e.target.value)}
+                      placeholder="/api/reservations"
                       className="w-full bg-surf-low border border-border-subtle rounded-lg px-3.5 py-2 text-sm focus:ring-1 focus:ring-brand-secondary outline-none text-text-primary"
                     />
                   </div>

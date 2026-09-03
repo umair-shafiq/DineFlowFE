@@ -1,4 +1,4 @@
-import { MenuItem, Category, Modifier, Order, User, RestaurantTable } from './types';
+import { MenuItem, Category, Modifier, Order, User, RestaurantTable, Reservation } from './types';
 
 export const INITIAL_CATEGORIES: Category[] = [
   { id: 'cat-1', name: 'Appetizers' },
@@ -242,6 +242,43 @@ export const INITIAL_TABLES: RestaurantTable[] = [
     tableNumber: 'T-05',
     capacity: 2,
     tableStatus: 'FREE'
+  }
+];
+
+export const INITIAL_RESERVATIONS: Reservation[] = [
+  {
+    reservationId: 1,
+    id: 1,
+    customerName: 'Muhammad Umair',
+    customerPhone: '03001234567',
+    numberOfGuests: 4,
+    reservationDateTime: '2026-09-03T20:30:00',
+    restaurantTableId: 1,
+    restaurantTable: {
+      restaurantTableId: 1,
+      tableNumber: 'T-01',
+      capacity: 6,
+      tableStatus: 'FREE'
+    },
+    status: 'CONFIRMED',
+    createdAt: '2026-09-01T23:23:23'
+  },
+  {
+    reservationId: 2,
+    id: 2,
+    customerName: 'Usman Ali',
+    customerPhone: '03221234567',
+    numberOfGuests: 5,
+    reservationDateTime: '2026-09-03T23:30:00',
+    restaurantTableId: 2,
+    restaurantTable: {
+      restaurantTableId: 2,
+      tableNumber: 'T-02',
+      capacity: 6,
+      tableStatus: 'FREE'
+    },
+    status: 'PENDING',
+    createdAt: '2026-09-02T17:30:11'
   }
 ];
 
