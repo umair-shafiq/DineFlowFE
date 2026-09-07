@@ -1,6 +1,7 @@
 import React from 'react';
 import { MenuItem, Category, Order } from '../types';
-import { TrendingUp, DollarSign, Receipt, CheckCircle, Percent, Clock, AlertCircle } from 'lucide-react';
+import { TrendingUp, DollarSign, Receipt, CheckCircle, Percent, Clock, AlertCircle, Coins } from 'lucide-react';
+import { useCurrency } from '../context/CurrencyContext';
 
 interface ReportsViewProps {
   orders: Order[];
@@ -9,6 +10,7 @@ interface ReportsViewProps {
 }
 
 export default function ReportsView({ orders, items, categories }: ReportsViewProps) {
+  const { formatPrice, symbol } = useCurrency();
   
   // Calculate statistics based on current orders state
   const completedOrders = orders.filter(o => o.status === 'completed');
@@ -101,7 +103,7 @@ export default function ReportsView({ orders, items, categories }: ReportsViewPr
           Analytics & Kitchen Reports
         </h1>
         <p className="text-text-secondary text-sm font-medium">
-          Monitor culinary cash flow, category distributions, and daily kitchen metrics.
+          Monitor culinary cash flow, category distributions, and daily kitchen metrics dynamically.
         </p>
       </div>
 
@@ -118,7 +120,7 @@ export default function ReportsView({ orders, items, categories }: ReportsViewPr
               Gross Sales
             </span>
             <p className="font-mono text-2xl font-black text-brand-primary tracking-tight">
-              ${totalGrossRevenue.toFixed(2)}
+              {formatPrice(totalGrossRevenue)}
             </p>
             <span className="text-[10px] text-text-secondary font-medium">
               Incl. active and closed tickets
@@ -173,7 +175,7 @@ export default function ReportsView({ orders, items, categories }: ReportsViewPr
               Avg Ticket Value
             </span>
             <p className="font-mono text-2xl font-black text-brand-primary tracking-tight">
-              ${averageTicketValue.toFixed(2)}
+              {formatPrice(averageTicketValue)}
             </p>
             <span className="text-[10px] text-text-secondary font-medium">
               Average size per table
@@ -216,7 +218,7 @@ export default function ReportsView({ orders, items, categories }: ReportsViewPr
                       </span>
                       <div className="flex gap-3 text-text-secondary shrink-0 font-mono text-[11px]">
                         <span>{seller.qty} sold</span>
-                        <span className="text-brand-secondary font-bold">${seller.sales.toFixed(2)}</span>
+                        <span className="text-brand-secondary font-bold">{formatPrice(seller.sales)}</span>
                       </div>
                     </div>
                     
@@ -305,7 +307,7 @@ export default function ReportsView({ orders, items, categories }: ReportsViewPr
                       Revenue
                     </span>
                     <span className="text-xs font-mono font-extrabold text-brand-primary leading-tight">
-                      ${totalCategorySales.toFixed(0)}
+                      {formatPrice(totalCategorySales)}
                     </span>
                   </div>
                 </div>
@@ -325,7 +327,7 @@ export default function ReportsView({ orders, items, categories }: ReportsViewPr
                       </div>
                       <div className="flex items-center gap-3 font-mono text-[11px] shrink-0 font-bold">
                         <span className="text-text-secondary/70">{sharePercent.toFixed(1)}%</span>
-                        <span className="text-brand-secondary">${data.value.toFixed(2)}</span>
+                        <span className="text-brand-secondary">{formatPrice(data.value)}</span>
                       </div>
                     </div>
                   );

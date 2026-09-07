@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Modifier, MenuItem } from '../types';
 import { Plus, Sliders, Edit2, Trash2, Check, X, AlertCircle } from 'lucide-react';
+import { useCurrency } from '../context/CurrencyContext';
 
 interface ModifiersViewProps {
   modifiers: Modifier[];
@@ -13,6 +14,7 @@ export default function ModifiersView({
   items,
   onModifiersChange
 }: ModifiersViewProps) {
+  const { formatPrice, symbol } = useCurrency();
   const [newModName, setNewModName] = useState('');
   const [newModPrice, setNewModPrice] = useState('');
   const [newModCategory, setNewModCategory] = useState('Add-ons');
@@ -284,7 +286,7 @@ export default function ModifiersView({
                             </span>
                           </p>
                           <span className="font-mono text-xs font-bold text-brand-secondary">
-                            {mod.price === 0 ? 'No extra charge (Free)' : `+$${mod.price.toFixed(2)}`}
+                            {mod.price === 0 ? 'No extra charge (Free)' : `+${formatPrice(mod.price)}`}
                           </span>
                         </div>
                       </div>

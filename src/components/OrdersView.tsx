@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { MenuItem, Modifier, Order, OrderItem, UserRole, RestaurantTable, TableStatus, Invoice } from '../types';
-import { Plus, Minus, Clipboard, ShoppingCart, Check, Play, Ban, Sparkles, User, Hash, X, Search, Zap, RefreshCw, Eye, CheckCircle2, Utensils, ShoppingBag, Shield, UserCheck, Receipt, CreditCard, Printer } from 'lucide-react';
+import { Plus, Minus, Clipboard, ShoppingCart, Check, Play, Ban, Sparkles, User, Hash, X, Search, Zap, RefreshCw, Eye, CheckCircle2, Utensils, ShoppingBag, Shield, UserCheck, Receipt, CreditCard, Printer, Coins } from 'lucide-react';
 import { apiOrders, apiTables, apiInvoices } from '../api';
+import { useCurrency } from '../context/CurrencyContext';
 import ReceiptView from './ReceiptView';
 
 interface OrdersViewProps {
@@ -29,6 +30,7 @@ export default function OrdersView({
   onNavigateToInvoice,
   userRole = 'ADMIN'
 }: OrdersViewProps) {
+  const { formatPrice, symbol } = useCurrency();
   const isWaiter = userRole === 'WAITER';
 
   // Dynamic Free tables ONLY for selection
@@ -108,11 +110,7 @@ export default function OrdersView({
   const handleGenerateOrViewBill = async (order: Order) => {
     const existing = getInvoiceForOrder(order);
     if (existing) {
-      if (onNavigateToInvoice) {
-        onNavigateToInvoice(existing.invoiceId, existing);
-      } else {
-        setActiveReceiptModalInvoice(existing);
-      }
+      setActiveReceiptModalInvoice(existing);
       return;
     }
 
@@ -127,11 +125,7 @@ export default function OrdersView({
         if (onInvoicesChange) {
           onInvoicesChange(updatedInvoicesList);
         }
-        if (onNavigateToInvoice) {
-          onNavigateToInvoice(createdInvoice.invoiceId, createdInvoice);
-        } else {
-          setActiveReceiptModalInvoice(createdInvoice);
-        }
+        setActiveReceiptModalInvoice(createdInvoice);
       }
     } catch (err: any) {
       console.warn('API error during POST /api/orders/{orderId}/invoice, using local fallback invoice:', err);
@@ -184,11 +178,7 @@ export default function OrdersView({
       if (onInvoicesChange) {
         onInvoicesChange(updatedInvoicesList);
       }
-      if (onNavigateToInvoice) {
-        onNavigateToInvoice(fallbackInvoice.invoiceId, fallbackInvoice);
-      } else {
-        setActiveReceiptModalInvoice(fallbackInvoice);
-      }
+      setActiveReceiptModalInvoice(fallbackInvoice);
     } finally {
       setGeneratingInvoiceOrderId(null);
     }
@@ -484,15 +474,21 @@ export default function OrdersView({
     onOrdersChange(updated);
   };
 
-  // Filters daily orders
-  const filteredOrders = orders.filter(ord => {
-    if (activeEndpointMode === 'active') {
-      const isActive = ord.status === 'pending' || ord.status === 'preparing';
-      if (!isActive) return false;
-    }
-    if (activeBoardFilter === 'all') return true;
-    return ord.status === activeBoardFilter;
-  });
+  // Filters daily orders (most recent created first)
+  const filteredOrders = [...orders]
+    .sort((a, b) => {
+      const timeA = new Date(a.createdAt).getTime() || 0;
+      const timeB = new Date(b.createdAt).getTime() || 0;
+      return timeB - timeA;
+    })
+    .filter(ord => {
+      if (activeEndpointMode === 'active') {
+        const isActive = ord.status === 'pending' || ord.status === 'preparing';
+        if (!isActive) return false;
+      }
+      if (activeBoardFilter === 'all') return true;
+      return ord.status === activeBoardFilter;
+    });
 
   return (
     <div className="px-10 py-6" id="orders-view">
@@ -659,7 +655,7 @@ export default function OrdersView({
                       {searchedOrder.items.map((item, idx) => (
                         <div key={idx} className="flex justify-between items-center text-xs">
                           <span className="font-medium text-text-primary">{item.quantity}x {item.name}</span>
-                          <span className="font-mono font-bold text-brand-primary">${(item.price * item.quantity).toFixed(2)}</span>
+                          <span className="font-mono font-bold text-brand-primary">{formatPrice(item.price * item.quantity)}</span>
                         </div>
                       ))}
                     </div>
@@ -669,18 +665,18 @@ export default function OrdersView({
                     {searchedOrder.subtotal !== undefined && searchedOrder.subtotal > 0 && (
                       <div className="flex justify-between text-text-secondary">
                         <span>Subtotal:</span>
-                        <span className="font-mono">${searchedOrder.subtotal.toFixed(2)}</span>
+                        <span className="font-mono">{formatPrice(searchedOrder.subtotal)}</span>
                       </div>
                     )}
                     {searchedOrder.taxAmount !== undefined && searchedOrder.taxAmount > 0 && (
                       <div className="flex justify-between text-text-secondary">
                         <span>Tax Amount:</span>
-                        <span className="font-mono">${searchedOrder.taxAmount.toFixed(2)}</span>
+                        <span className="font-mono">{formatPrice(searchedOrder.taxAmount)}</span>
                       </div>
                     )}
                     <div className="flex justify-between font-bold text-sm text-brand-primary pt-1.5 border-t border-border-subtle">
                       <span>Total Amount:</span>
-                      <span className="text-brand-secondary font-mono">${(searchedOrder.totalAmount || searchedOrder.total).toFixed(2)}</span>
+                      <span className="text-brand-secondary font-mono">{formatPrice(searchedOrder.totalAmount || searchedOrder.total)}</span>
                     </div>
                   </div>
                 </div>
@@ -828,7 +824,7 @@ export default function OrdersView({
                           )}
                         </div>
                         <span className="font-mono text-xs text-text-secondary shrink-0">
-                          ${(item.price * item.quantity).toFixed(2)}
+                          {formatPrice(item.price * item.quantity)}
                         </span>
                       </div>
                     ))}
@@ -839,13 +835,13 @@ export default function OrdersView({
                     {order.subtotal !== undefined && order.subtotal > 0 && (
                       <div className="flex justify-between text-text-secondary text-[11px]">
                         <span>Subtotal:</span>
-                        <span className="font-mono">${order.subtotal.toFixed(2)}</span>
+                        <span className="font-mono">{formatPrice(order.subtotal)}</span>
                       </div>
                     )}
                     {order.taxAmount !== undefined && order.taxAmount > 0 && (
                       <div className="flex justify-between text-text-secondary text-[11px]">
                         <span>Tax:</span>
-                        <span className="font-mono">${order.taxAmount.toFixed(2)}</span>
+                        <span className="font-mono">{formatPrice(order.taxAmount)}</span>
                       </div>
                     )}
                     <div className="flex justify-between items-center font-sans font-bold text-brand-primary pt-0.5">
@@ -853,7 +849,7 @@ export default function OrdersView({
                         {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
                       <p>
-                        Total: <span className="font-mono text-sm text-brand-secondary font-extrabold">${(order.totalAmount || order.total).toFixed(2)}</span>
+                        Total: <span className="font-mono text-sm text-brand-secondary font-extrabold">{formatPrice(order.totalAmount || order.total)}</span>
                       </p>
                     </div>
                   </div>
@@ -1027,7 +1023,7 @@ export default function OrdersView({
                         {item.name}
                       </h4>
                       <p className="font-mono text-xs font-semibold text-brand-secondary mt-0.5">
-                        ${item.price.toFixed(2)}
+                        {formatPrice(item.price)}
                       </p>
                       <span className="font-mono text-[9px] font-bold text-text-secondary uppercase tracking-wider block mt-1">
                         {typeof item.category === 'object' ? ((item.category as any).name || 'Uncategorized') : (item.category || 'Uncategorized')}
@@ -1075,7 +1071,7 @@ export default function OrdersView({
                           </div>
                         )}
                         <p className="font-mono text-brand-secondary font-bold mt-1 text-[11px]">
-                          ${ci.price.toFixed(2)} each
+                          {formatPrice(ci.price)} each
                         </p>
                       </div>
 
@@ -1256,7 +1252,7 @@ export default function OrdersView({
                   <div className="flex justify-between items-center text-sm font-semibold">
                     <span className="text-text-primary">Cart Total</span>
                     <span className="font-mono text-brand-secondary text-base font-bold">
-                      ${cartTotal.toFixed(2)}
+                      {formatPrice(cartTotal)}
                     </span>
                   </div>
 
@@ -1336,7 +1332,7 @@ export default function OrdersView({
                     </div>
                     <span className="flex-1 text-xs">{mod.name}</span>
                     <span className="font-mono text-xs font-bold">
-                      {mod.price === 0 ? 'FREE' : `+$${mod.price.toFixed(2)}`}
+                      {mod.price === 0 ? 'FREE' : `+${formatPrice(mod.price)}`}
                     </span>
                   </label>
                 );
@@ -1357,7 +1353,7 @@ export default function OrdersView({
                 onClick={handleConfirmCustomization}
                 className="flex-1 py-2.5 rounded-lg bg-brand-primary text-white text-xs font-bold hover:bg-brand-primary/95 transition-colors active-scale"
               >
-                Add to Cart (+${selectedModifiersForActiveItem.reduce((sum, m) => sum + m.price, 0).toFixed(2)})
+                Add to Cart (+{formatPrice(selectedModifiersForActiveItem.reduce((sum, m) => sum + m.price, 0))})
               </button>
             </div>
 

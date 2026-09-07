@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Invoice, PaymentRecord } from '../types';
 import { apiInvoices } from '../api';
+import { useCurrency } from '../context/CurrencyContext';
 import { 
   Printer, 
   CreditCard, 
@@ -33,6 +34,7 @@ export default function ReceiptView({
   onClose,
   isModal = false
 }: ReceiptViewProps) {
+  const { formatPrice, currencyCode, symbol } = useCurrency();
   const [invoice, setInvoice] = useState<Invoice>(initialInvoice);
   const [paymentRecord, setPaymentRecord] = useState<PaymentRecord | null>(null);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -194,10 +196,10 @@ export default function ReceiptView({
                     {item.quantity}
                   </span>
                   <span className="col-span-2 text-right text-neutral-500">
-                    ${item.unitPrice.toFixed(2)}
+                    {formatPrice(item.unitPrice)}
                   </span>
                   <span className="col-span-2 text-right font-bold text-neutral-900">
-                    ${item.subtotal.toFixed(2)}
+                    {formatPrice(item.subtotal)}
                   </span>
                 </div>
               ))
@@ -213,15 +215,15 @@ export default function ReceiptView({
         <div className="py-3.5 space-y-1.5 border-b border-dashed border-neutral-300 text-[11px]">
           <div className="flex justify-between text-neutral-600">
             <span>Subtotal:</span>
-            <span className="font-bold font-mono">${invoice.subtotal.toFixed(2)}</span>
+            <span className="font-bold font-mono">{formatPrice(invoice.subtotal)}</span>
           </div>
           <div className="flex justify-between text-neutral-600">
             <span>Tax Amount (15%):</span>
-            <span className="font-bold font-mono">${invoice.taxAmount.toFixed(2)}</span>
+            <span className="font-bold font-mono">{formatPrice(invoice.taxAmount)}</span>
           </div>
           <div className="flex justify-between items-center text-sm font-extrabold text-neutral-900 pt-2 border-t border-neutral-200">
             <span>TOTAL DUE:</span>
-            <span className="text-base font-mono">${invoice.totalAmount.toFixed(2)}</span>
+            <span className="text-base font-mono">{formatPrice(invoice.totalAmount)}</span>
           </div>
         </div>
 
@@ -253,7 +255,7 @@ export default function ReceiptView({
               <div className="flex justify-between">
                 <span className="text-neutral-500">Amount Paid:</span>
                 <span className="font-bold font-mono text-neutral-800">
-                  ${(paymentRecord?.amountPaid || invoice.totalAmount).toFixed(2)}
+                  {formatPrice(paymentRecord?.amountPaid || invoice.totalAmount)}
                 </span>
               </div>
               {paymentRecord?.paidAt && (

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Search, Bell, Settings, Plus, LogOut, Shield, UserCheck } from 'lucide-react';
 import { AuthUser } from '../types';
+import CurrencySelector from './CurrencySelector';
 
 interface HeaderProps {
   currentTab: string;
@@ -120,6 +121,9 @@ export default function Header({
             </button>
           )}
         </div>
+
+        {/* Currency Switcher */}
+        <CurrencySelector />
 
         {/* Notifications and Settings */}
         <div className="flex items-center gap-1.5" id="header-utility-buttons">

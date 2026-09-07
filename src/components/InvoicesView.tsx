@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Invoice, PaymentRecord, UserRole } from '../types';
 import { apiInvoices } from '../api';
+import { useCurrency } from '../context/CurrencyContext';
 import { 
   Receipt, 
   Search, 
@@ -16,7 +17,8 @@ import {
   DollarSign, 
   ArrowUpDown,
   Utensils,
-  Plus
+  Plus,
+  Coins
 } from 'lucide-react';
 import ReceiptView from './ReceiptView';
 import RecordPaymentModal from './RecordPaymentModal';
@@ -36,6 +38,7 @@ export default function InvoicesView({
   onSelectInvoice,
   userRole = 'ADMIN'
 }: InvoicesViewProps) {
+  const { formatPrice, symbol } = useCurrency();
   const [activeTab, setActiveTab] = useState<'all' | 'PAID' | 'UNPAID'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeReceiptInvoice, setActiveReceiptInvoice] = useState<Invoice | null>(() => {
@@ -57,9 +60,11 @@ export default function InvoicesView({
     }
   }, [selectedInvoiceId, invoices]);
 
-  // Load from API on mount
+  // Load from API on mount ONLY if empty
   useEffect(() => {
-    handleFetchInvoices();
+    if (!invoices || invoices.length === 0) {
+      handleFetchInvoices();
+    }
   }, []);
 
   const handleFetchInvoices = async () => {
@@ -98,26 +103,32 @@ export default function InvoicesView({
   const unpaidInvoices = invoices.filter(inv => inv.paymentStatus.toUpperCase() !== 'PAID');
   const unpaidAmount = unpaidInvoices.reduce((sum, inv) => sum + (inv.totalAmount || 0), 0);
 
-  // Filtering
-  const filteredInvoices = invoices.filter((inv) => {
-    const statusMatch = activeTab === 'all' 
-      ? true 
-      : activeTab === 'PAID' 
-        ? inv.paymentStatus.toUpperCase() === 'PAID'
-        : inv.paymentStatus.toUpperCase() !== 'PAID';
+  // Filtering & Sorting (newest first)
+  const filteredInvoices = [...invoices]
+    .sort((a, b) => {
+      const timeA = new Date(a.createdAt).getTime() || 0;
+      const timeB = new Date(b.createdAt).getTime() || 0;
+      return timeB - timeA;
+    })
+    .filter((inv) => {
+      const statusMatch = activeTab === 'all' 
+        ? true 
+        : activeTab === 'PAID' 
+          ? inv.paymentStatus.toUpperCase() === 'PAID'
+          : inv.paymentStatus.toUpperCase() !== 'PAID';
 
-    if (!statusMatch) return false;
+      if (!statusMatch) return false;
 
-    if (!searchQuery.trim()) return true;
+      if (!searchQuery.trim()) return true;
 
-    const query = searchQuery.toLowerCase();
-    const invNum = String(inv.invoiceNumber || '').toLowerCase();
-    const orderNum = String(inv.order?.orderNumber || `ord-${inv.order?.orderId || ''}`).toLowerCase();
-    const tableNum = String(inv.order?.restaurantTable?.tableNumber || '').toLowerCase();
-    const idStr = String(inv.invoiceId || inv.id || '');
+      const query = searchQuery.toLowerCase();
+      const invNum = String(inv.invoiceNumber || '').toLowerCase();
+      const orderNum = String(inv.order?.orderNumber || `ord-${inv.order?.orderId || ''}`).toLowerCase();
+      const tableNum = String(inv.order?.restaurantTable?.tableNumber || '').toLowerCase();
+      const idStr = String(inv.invoiceId || inv.id || '');
 
-    return invNum.includes(query) || orderNum.includes(query) || tableNum.includes(query) || idStr.includes(query);
-  });
+      return invNum.includes(query) || orderNum.includes(query) || tableNum.includes(query) || idStr.includes(query);
+    });
 
   // If receipt view is opened
   if (activeReceiptInvoice) {
@@ -179,7 +190,7 @@ export default function InvoicesView({
             <DollarSign className="w-4 h-4 text-blue-600" />
           </div>
           <p className="font-display font-bold text-2xl text-brand-primary">
-            ${totalInvoicedAmount.toFixed(2)}
+            {formatPrice(totalInvoicedAmount)}
           </p>
           <p className="text-[11px] text-text-secondary mt-0.5">
             Gross revenue generated
@@ -192,7 +203,7 @@ export default function InvoicesView({
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
           </div>
           <p className="font-display font-bold text-2xl text-emerald-700">
-            ${paidAmount.toFixed(2)}
+            {formatPrice(paidAmount)}
           </p>
           <p className="text-[11px] text-emerald-800 mt-0.5">
             {paidInvoices.length} orders settled
@@ -205,7 +216,7 @@ export default function InvoicesView({
             <AlertCircle className="w-4 h-4 text-amber-600" />
           </div>
           <p className="font-display font-bold text-2xl text-amber-800">
-            ${unpaidAmount.toFixed(2)}
+            {formatPrice(unpaidAmount)}
           </p>
           <p className="text-[11px] text-amber-900 mt-0.5">
             {unpaidInvoices.length} invoices awaiting payment
@@ -343,7 +354,7 @@ export default function InvoicesView({
 
                       {/* Total Amount */}
                       <td className="py-3.5 px-4 font-mono font-bold text-sm text-brand-primary">
-                        ${inv.totalAmount.toFixed(2)}
+                        {formatPrice(inv.totalAmount)}
                       </td>
 
                       {/* Payment Status */}

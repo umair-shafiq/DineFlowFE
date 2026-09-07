@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { MenuItem, Category, Modifier } from '../types';
 import { Plus, Edit2, Trash2, X, AlertTriangle, Image as ImageIcon } from 'lucide-react';
+import { useCurrency } from '../context/CurrencyContext';
 
 interface MenuItemsViewProps {
   items: MenuItem[];
@@ -33,6 +34,7 @@ export default function MenuItemsView({
   isAddModalOpen,
   setIsAddModalOpen
 }: MenuItemsViewProps) {
+  const { formatPrice, symbol } = useCurrency();
   const [activeCategory, setActiveCategory] = useState<string>('All');
   
   // State for Editing
@@ -317,7 +319,7 @@ export default function MenuItemsView({
               {/* Price and Action Buttons */}
               <div className="flex justify-between items-center mt-auto pt-3 border-t border-border-subtle/50">
                 <span className="font-mono text-lg font-bold text-brand-secondary">
-                  ${item.price.toFixed(2)}
+                  {formatPrice(item.price)}
                 </span>
                 
                 <div className="flex gap-1.5">

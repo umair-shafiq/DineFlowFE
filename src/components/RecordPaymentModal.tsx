@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Invoice, PaymentMethod, PaymentRecord } from '../types';
 import { apiInvoices } from '../api';
-import { X, CreditCard, DollarSign, CheckCircle2, AlertCircle, RefreshCw, Landmark, Banknote } from 'lucide-react';
+import { useCurrency } from '../context/CurrencyContext';
+import { X, CreditCard, CheckCircle2, AlertCircle, RefreshCw, Landmark, Banknote, Coins } from 'lucide-react';
 
 interface RecordPaymentModalProps {
   isOpen: boolean;
@@ -16,6 +17,7 @@ export default function RecordPaymentModal({
   onClose,
   onPaymentSuccess
 }: RecordPaymentModalProps) {
+  const { formatPrice, symbol, currencyCode } = useCurrency();
   if (!isOpen || !invoice) return null;
 
   const [amountPaid, setAmountPaid] = useState<number>(invoice.totalAmount || 0);
@@ -114,7 +116,7 @@ export default function RecordPaymentModal({
             <div>
               <span className="text-[11px] font-mono text-text-secondary uppercase">Total Due:</span>
               <p className="font-display font-extrabold text-lg text-brand-primary">
-                ${invoice.totalAmount.toFixed(2)}
+                {formatPrice(invoice.totalAmount)}
               </p>
             </div>
             <div className="text-right">
@@ -135,12 +137,12 @@ export default function RecordPaymentModal({
           {/* Amount Input */}
           <div className="space-y-1.5">
             <label className="font-mono text-[11px] font-bold text-text-secondary uppercase tracking-wider flex items-center gap-1.5">
-              <DollarSign className="w-3.5 h-3.5 text-brand-secondary" />
-              <span>Amount Paid ($)</span>
+              <Coins className="w-3.5 h-3.5 text-brand-secondary" />
+              <span>Amount Paid ({currencyCode})</span>
             </label>
             <div className="relative">
               <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-mono font-bold text-text-secondary text-sm">
-                $
+                {symbol}
               </span>
               <input
                 type="number"
@@ -149,7 +151,7 @@ export default function RecordPaymentModal({
                 required
                 value={amountPaid}
                 onChange={(e) => setAmountPaid(parseFloat(e.target.value) || 0)}
-                className="w-full bg-white border border-border-subtle focus:border-brand-secondary focus:ring-2 focus:ring-brand-secondary/15 rounded-xl pl-8 pr-4 py-2.5 text-sm font-mono font-bold text-text-primary outline-none transition-all"
+                className="w-full bg-white border border-border-subtle focus:border-brand-secondary focus:ring-2 focus:ring-brand-secondary/15 rounded-xl pl-12 pr-4 py-2.5 text-sm font-mono font-bold text-text-primary outline-none transition-all"
                 placeholder="0.00"
               />
             </div>
