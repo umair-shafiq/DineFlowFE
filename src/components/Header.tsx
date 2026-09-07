@@ -33,6 +33,7 @@ export default function Header({
   const adminNavLinks = [
     { id: 'dashboard', label: 'Dashboard', target: 'reports' },
     { id: 'orders', label: 'Orders', target: 'orders' },
+    { id: 'invoices', label: 'Invoices', target: 'invoices' },
     { id: 'reservations', label: 'Reservations', target: 'reservations' },
     { id: 'tables', label: 'Tables', target: 'tables' },
     { id: 'inventory', label: 'Inventory', target: 'menu-items' },
@@ -50,6 +51,7 @@ export default function Header({
     if (currentTab === 'menu-items' || currentTab === 'categories' || currentTab === 'modifiers') return 'inventory';
     if (currentTab === 'reports') return 'dashboard';
     if (currentTab === 'orders') return 'orders';
+    if (currentTab === 'invoices') return 'invoices';
     if (currentTab === 'reservations') return 'reservations';
     if (currentTab === 'tables') return 'tables';
     if (currentTab === 'users') return 'users';

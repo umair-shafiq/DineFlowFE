@@ -1,4 +1,4 @@
-import { MenuItem, Category, Order, OrderItem, User, UserRole, AuthUser, RestaurantTable, TableStatus, Reservation, ReservationStatus, ReservationRequestDto } from './types';
+import { MenuItem, Category, Order, OrderItem, User, UserRole, AuthUser, RestaurantTable, TableStatus, Reservation, ReservationStatus, ReservationRequestDto, Invoice, PaymentRecord, RecordPaymentPayload, PaymentStatus, PaymentMethod } from './types';
 
 export interface SpringBootSettings {
   enabled: boolean;
@@ -10,6 +10,7 @@ export interface SpringBootSettings {
   authPath?: string;
   tablesPath?: string;
   reservationsPath?: string;
+  invoicesPath?: string;
 }
 
 const SETTINGS_KEY = 'spring_boot_connector_settings';
@@ -23,7 +24,8 @@ const DEFAULT_SETTINGS: SpringBootSettings = {
   usersPath: '/api/users',
   authPath: '/api/auth',
   tablesPath: '/api/tables',
-  reservationsPath: '/api/reservations'
+  reservationsPath: '/api/reservations',
+  invoicesPath: '/api/invoices'
 };
 
 // JWT token storage with localStorage persistence across page reloads
@@ -87,6 +89,9 @@ export function getApiSettings(): SpringBootSettings {
       }
       if (!parsed.reservationsPath) {
         parsed.reservationsPath = '/api/reservations';
+      }
+      if (!parsed.invoicesPath) {
+        parsed.invoicesPath = '/api/invoices';
       }
       if (parsed.enabled === undefined) {
         parsed.enabled = true;
@@ -888,3 +893,140 @@ export const apiReservations = {
     await apiRequest<any>(`${basePath}/${id}`, 'DELETE');
   }
 };
+
+// Normalizer for Invoice
+function normalizeInvoice(raw: any): Invoice {
+  if (!raw) return raw;
+  const invId = Number(raw.invoiceId || raw.id || 0);
+  
+  // Normalize nested order if present
+  let normalizedOrder: any = raw.order || {};
+  if (raw.order) {
+    const orderRaw = raw.order;
+    const rawItems = Array.isArray(orderRaw.orderItems) ? orderRaw.orderItems : (Array.isArray(orderRaw.items) ? orderRaw.items : []);
+    const normalizedItems = rawItems.map((it: any) => {
+      const itId = Number(it.orderItemId || it.id || 0);
+      const mItem = it.menuItem || it.item || {};
+      return {
+        orderItemId: itId,
+        quantity: Number(it.quantity || 1),
+        unitPrice: Number(it.unitPrice !== undefined ? it.unitPrice : (mItem.price || 0)),
+        subtotal: Number(it.subtotal !== undefined ? it.subtotal : ((it.unitPrice || mItem.price || 0) * (it.quantity || 1))),
+        menuItem: {
+          id: mItem.id !== undefined ? mItem.id : (it.menuItemId || ''),
+          name: String(mItem.name || it.name || 'Menu Item'),
+          description: mItem.description ? String(mItem.description) : undefined,
+          price: Number(mItem.price || it.unitPrice || 0),
+          imageUrl: mItem.imageUrl || mItem.image || undefined,
+          availabilityStatus: mItem.availabilityStatus || 'AVAILABLE',
+          category: mItem.category ? {
+            id: mItem.category.id,
+            name: typeof mItem.category === 'object' ? mItem.category.name : String(mItem.category)
+          } : undefined
+        }
+      };
+    });
+
+    normalizedOrder = {
+      orderId: Number(orderRaw.orderId || orderRaw.id || 0),
+      orderNumber: String(orderRaw.orderNumber || `ORD-${orderRaw.orderId || ''}`),
+      orderStatus: String(orderRaw.orderStatus || orderRaw.status || 'COMPLETED'),
+      orderType: (String(orderRaw.orderType || 'DINE_IN').toUpperCase()) as 'DINE_IN' | 'TAKEAWAY',
+      createdAt: String(orderRaw.createdAt || raw.createdAt || new Date().toISOString()),
+      subtotal: Number(orderRaw.subtotal !== undefined ? orderRaw.subtotal : (raw.subtotal || 0)),
+      taxAmount: Number(orderRaw.taxAmount !== undefined ? orderRaw.taxAmount : (raw.taxAmount || 0)),
+      totalAmount: Number(orderRaw.totalAmount !== undefined ? orderRaw.totalAmount : (raw.totalAmount || 0)),
+      restaurantTable: orderRaw.restaurantTable ? {
+        restaurantTableId: Number(orderRaw.restaurantTable.restaurantTableId || orderRaw.restaurantTable.id || 0),
+        tableNumber: String(orderRaw.restaurantTable.tableNumber || ''),
+        capacity: Number(orderRaw.restaurantTable.capacity || 4),
+        tableStatus: String(orderRaw.restaurantTable.tableStatus || 'FREE')
+      } : undefined,
+      orderItems: normalizedItems
+    };
+  }
+
+  const subtotal = Number(raw.subtotal !== undefined ? raw.subtotal : (normalizedOrder.subtotal || 0));
+  const taxAmount = Number(raw.taxAmount !== undefined ? raw.taxAmount : (normalizedOrder.taxAmount || 0));
+  const totalAmount = Number(raw.totalAmount !== undefined ? raw.totalAmount : (normalizedOrder.totalAmount || subtotal + taxAmount));
+
+  return {
+    invoiceId: invId,
+    id: invId,
+    invoiceNumber: String(raw.invoiceNumber || `INV-${invId}`),
+    createdAt: String(raw.createdAt || new Date().toISOString()),
+    paymentStatus: (String(raw.paymentStatus || 'UNPAID').toUpperCase()) as PaymentStatus,
+    subtotal: subtotal,
+    taxAmount: taxAmount,
+    totalAmount: totalAmount,
+    order: normalizedOrder
+  };
+}
+
+// Normalizer for Payment Record
+function normalizePayment(raw: any): PaymentRecord {
+  if (!raw) return raw;
+  return {
+    paymentId: raw.paymentId ? Number(raw.paymentId) : (raw.id ? Number(raw.id) : undefined),
+    invoiceId: Number(raw.invoiceId || 0),
+    amountPaid: Number(raw.amountPaid || 0),
+    paymentMethod: (String(raw.paymentMethod || 'CASH').toUpperCase()) as PaymentMethod,
+    paidAt: raw.paidAt ? String(raw.paidAt) : new Date().toISOString()
+  };
+}
+
+// Invoices REST API
+export const apiInvoices = {
+  // GET /api/invoices
+  list: async (): Promise<Invoice[]> => {
+    const settings = getApiSettings();
+    const path = settings.invoicesPath || '/api/invoices';
+    const list = await apiRequest<any[]>(path, 'GET');
+    return Array.isArray(list) ? list.map(normalizeInvoice) : [];
+  },
+
+  // GET /api/invoices/{id}
+  getById: async (id: number | string): Promise<Invoice> => {
+    const settings = getApiSettings();
+    const basePath = (settings.invoicesPath || '/api/invoices').replace(/\/$/, '');
+    const res = await apiRequest<any>(`${basePath}/${id}`, 'GET');
+    return normalizeInvoice(res);
+  },
+
+  // GET /api/invoices/order/{orderId}
+  getByOrderId: async (orderId: number | string): Promise<Invoice> => {
+    const settings = getApiSettings();
+    const basePath = (settings.invoicesPath || '/api/invoices').replace(/\/$/, '');
+    const res = await apiRequest<any>(`${basePath}/order/${orderId}`, 'GET');
+    return normalizeInvoice(res);
+  },
+
+  // POST /api/orders/{orderId}/invoice
+  generateFromOrder: async (orderId: number | string): Promise<Invoice> => {
+    const settings = getApiSettings();
+    const ordersBase = (settings.ordersPath || '/api/orders').replace(/\/$/, '');
+    const res = await apiRequest<any>(`${ordersBase}/${orderId}/invoice`, 'POST');
+    return normalizeInvoice(res);
+  },
+
+  // POST /api/invoices/{id}/payment
+  recordPayment: async (invoiceId: number | string, payload: RecordPaymentPayload): Promise<PaymentRecord> => {
+    const settings = getApiSettings();
+    const basePath = (settings.invoicesPath || '/api/invoices').replace(/\/$/, '');
+    const body = {
+      amountPaid: Number(payload.amountPaid),
+      paymentMethod: String(payload.paymentMethod).toUpperCase()
+    };
+    const res = await apiRequest<any>(`${basePath}/${invoiceId}/payment`, 'POST', body);
+    return normalizePayment(res);
+  },
+
+  // GET /api/invoices/{id}/payment
+  getPayment: async (invoiceId: number | string): Promise<PaymentRecord> => {
+    const settings = getApiSettings();
+    const basePath = (settings.invoicesPath || '/api/invoices').replace(/\/$/, '');
+    const res = await apiRequest<any>(`${basePath}/${invoiceId}/payment`, 'GET');
+    return normalizePayment(res);
+  }
+};
+

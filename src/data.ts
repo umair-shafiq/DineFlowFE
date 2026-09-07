@@ -1,4 +1,4 @@
-import { MenuItem, Category, Modifier, Order, User, RestaurantTable, Reservation } from './types';
+import { MenuItem, Category, Modifier, Order, User, RestaurantTable, Reservation, Invoice } from './types';
 
 export const INITIAL_CATEGORIES: Category[] = [
   { id: 'cat-1', name: 'Appetizers' },
@@ -281,6 +281,102 @@ export const INITIAL_RESERVATIONS: Reservation[] = [
     createdAt: '2026-09-02T17:30:11'
   }
 ];
+
+export const INITIAL_INVOICES: Invoice[] = [
+  {
+    invoiceId: 1,
+    id: 1,
+    invoiceNumber: 'INV-411788776784279',
+    createdAt: '2026-09-07T15:26:24',
+    paymentStatus: 'UNPAID',
+    subtotal: 250.5,
+    taxAmount: 37.58,
+    totalAmount: 288.08,
+    order: {
+      orderId: 41,
+      orderNumber: 'ORD-20260903-38CB',
+      orderStatus: 'COMPLETED',
+      orderType: 'DINE_IN',
+      createdAt: '2026-09-03T15:06:57',
+      restaurantTable: {
+        restaurantTableId: 8,
+        tableNumber: 'T-08',
+        capacity: 3,
+        tableStatus: 'FREE'
+      },
+      subtotal: 250.5,
+      taxAmount: 37.58,
+      totalAmount: 288.08,
+      orderItems: [
+        {
+          orderItemId: 80,
+          quantity: 1,
+          unitPrice: 250.5,
+          subtotal: 250.5,
+          menuItem: {
+            id: 17,
+            name: 'Sprite',
+            description: 'Cold Sprite',
+            price: 250.5,
+            imageUrl: 'https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?auto=format&fit=crop&w=600&q=80',
+            availabilityStatus: 'AVAILABLE',
+            category: {
+              id: 5,
+              name: 'Cold Drinks'
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    invoiceId: 2,
+    id: 2,
+    invoiceNumber: 'INV-401788778211328',
+    createdAt: '2026-09-07T15:50:11',
+    paymentStatus: 'UNPAID',
+    subtotal: 96.6,
+    taxAmount: 14.49,
+    totalAmount: 111.09,
+    order: {
+      orderId: 40,
+      orderNumber: 'ORD-20260903-8B10',
+      orderStatus: 'COMPLETED',
+      orderType: 'DINE_IN',
+      createdAt: '2026-09-03T15:04:53',
+      restaurantTable: {
+        restaurantTableId: 8,
+        tableNumber: 'T-08',
+        capacity: 3,
+        tableStatus: 'FREE'
+      },
+      subtotal: 96.6,
+      taxAmount: 14.49,
+      totalAmount: 111.09,
+      orderItems: [
+        {
+          orderItemId: 79,
+          quantity: 1,
+          unitPrice: 96.6,
+          subtotal: 96.6,
+          menuItem: {
+            id: 2,
+            name: 'Burger',
+            description: 'The Pizza & Burger is Delicious',
+            price: 96.6,
+            imageUrl: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=600&q=80',
+            availabilityStatus: 'AVAILABLE',
+            category: {
+              id: 21,
+              name: 'Fast Food'
+            }
+          }
+        }
+      ]
+    }
+  }
+];
+
 
 // Helper to load items
 export function loadData<T>(key: string, initial: T): T {

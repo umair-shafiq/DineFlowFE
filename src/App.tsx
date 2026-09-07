@@ -10,9 +10,10 @@ import SupportView from './components/SupportView';
 import UsersView from './components/UsersView';
 import TablesView from './components/TablesView';
 import ReservationsView from './components/ReservationsView';
+import InvoicesView from './components/InvoicesView';
 import LoginView from './components/LoginView';
 
-import { MenuItem, Category, Modifier, Order, AuthUser, User, RestaurantTable, Reservation } from './types';
+import { MenuItem, Category, Modifier, Order, AuthUser, User, RestaurantTable, Reservation, Invoice } from './types';
 import {
   INITIAL_MENU_ITEMS,
   INITIAL_CATEGORIES,
@@ -21,6 +22,7 @@ import {
   INITIAL_USERS,
   INITIAL_TABLES,
   INITIAL_RESERVATIONS,
+  INITIAL_INVOICES,
   loadData,
   saveData
 } from './data';
@@ -34,6 +36,7 @@ import {
   apiUsers,
   apiTables,
   apiReservations,
+  apiInvoices,
   setAuthToken,
   setOnUnauthorizedCallback
 } from './api';
@@ -78,6 +81,8 @@ export default function App() {
   const [users, setUsers] = useState<User[]>([]);
   const [tables, setTables] = useState<RestaurantTable[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>(() => loadData<Invoice[]>('chef_invoices', INITIAL_INVOICES));
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | string | null>(null);
 
   // Spring Boot Integration States
   const [apiSettings, setApiSettings] = useState<SpringBootSettings>(getApiSettings());
@@ -248,6 +253,22 @@ export default function App() {
         setReservations(loadData<Reservation[]>('chef_reservations', INITIAL_RESERVATIONS));
       }
 
+      // 7. Fetch invoices (GET /api/invoices) - Admin only
+      if (!isWaiterUser) {
+        try {
+          const fetchedInvoices = await apiInvoices.list();
+          if (Array.isArray(fetchedInvoices) && fetchedInvoices.length > 0) {
+            setInvoices(fetchedInvoices);
+          } else {
+            setInvoices(loadData<Invoice[]>('chef_invoices', INITIAL_INVOICES));
+          }
+        } catch (err) {
+          setInvoices(loadData<Invoice[]>('chef_invoices', INITIAL_INVOICES));
+        }
+      } else {
+        setInvoices(loadData<Invoice[]>('chef_invoices', INITIAL_INVOICES));
+      }
+
       if (isWaiterUser) {
         if (ordersSuccess) {
           setApiConnected(true);
@@ -292,6 +313,7 @@ export default function App() {
       setUsers(loadData<User[]>('chef_users', INITIAL_USERS));
       setTables(loadData<RestaurantTable[]>('chef_tables', INITIAL_TABLES));
       setReservations(loadData<Reservation[]>('chef_reservations', INITIAL_RESERVATIONS));
+      setInvoices(loadData<Invoice[]>('chef_invoices', INITIAL_INVOICES));
       setApiConnected(null);
       setIsApiLoading(false);
     }
@@ -486,6 +508,11 @@ export default function App() {
     saveData('chef_reservations', updatedReservations);
   };
 
+  const handleInvoicesChange = useCallback((updatedInvoices: Invoice[]) => {
+    setInvoices(updatedInvoices);
+    saveData('chef_invoices', updatedInvoices);
+  }, []);
+
   // Cascade category edits or deletions down to menu items
   const handleItemsCategoryReset = (oldCategoryName: string, newCategoryName: string) => {
     const updatedItems = items.map((item) => {
@@ -585,8 +612,24 @@ export default function App() {
               items={items}
               modifiers={modifiers}
               tables={tables}
+              invoices={invoices}
               onOrdersChange={handleOrdersChange}
               onTablesChange={handleTablesChange}
+              onInvoicesChange={handleInvoicesChange}
+              onNavigateToInvoice={(invId) => {
+                setSelectedInvoiceId(invId);
+                handleTabChange('invoices');
+              }}
+              userRole={currentUser.userRole}
+            />
+          )}
+
+          {safeTab === 'invoices' && isAdmin && (
+            <InvoicesView
+              invoices={invoices}
+              onInvoicesChange={handleInvoicesChange}
+              selectedInvoiceId={selectedInvoiceId}
+              onSelectInvoice={(inv) => setSelectedInvoiceId(inv ? inv.invoiceId : null)}
               userRole={currentUser.userRole}
             />
           )}

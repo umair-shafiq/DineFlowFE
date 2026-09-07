@@ -44,6 +44,7 @@ export default function SupportView({
   const [ordersPathInput, setOrdersPathInput] = useState(apiSettings.ordersPath || '/api/orders');
   const [tablesPathInput, setTablesPathInput] = useState(apiSettings.tablesPath || '/api/tables');
   const [reservationsPathInput, setReservationsPathInput] = useState(apiSettings.reservationsPath || '/api/reservations');
+  const [invoicesPathInput, setInvoicesPathInput] = useState(apiSettings.invoicesPath || '/api/invoices');
 
   // Testing & seeding states
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -59,6 +60,7 @@ export default function SupportView({
     setOrdersPathInput(apiSettings.ordersPath || '/api/orders');
     setTablesPathInput(apiSettings.tablesPath || '/api/tables');
     setReservationsPathInput(apiSettings.reservationsPath || '/api/reservations');
+    setInvoicesPathInput(apiSettings.invoicesPath || '/api/invoices');
   }, [apiSettings]);
 
   // Load scratchpad notes on load
@@ -91,7 +93,8 @@ export default function SupportView({
       menuItemsPath: menuItemsPathInput.trim() || '/api/menu-items',
       ordersPath: ordersPathInput.trim() || '/api/orders',
       tablesPath: tablesPathInput.trim() || '/api/tables',
-      reservationsPath: reservationsPathInput.trim() || '/api/reservations'
+      reservationsPath: reservationsPathInput.trim() || '/api/reservations',
+      invoicesPath: invoicesPathInput.trim() || '/api/invoices'
     };
     onApiSettingsChange(newSettings);
     setTestResult(null);
@@ -384,6 +387,19 @@ export default function SupportView({
                       value={reservationsPathInput}
                       onChange={(e) => setReservationsPathInput(e.target.value)}
                       placeholder="/api/reservations"
+                      className="w-full bg-surf-low border border-border-subtle rounded-lg px-3.5 py-2 text-sm focus:ring-1 focus:ring-brand-secondary outline-none text-text-primary"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="font-mono text-[10px] font-bold text-text-secondary uppercase tracking-wider block">
+                      Invoices Path
+                    </label>
+                    <input
+                      type="text"
+                      value={invoicesPathInput}
+                      onChange={(e) => setInvoicesPathInput(e.target.value)}
+                      placeholder="/api/invoices"
                       className="w-full bg-surf-low border border-border-subtle rounded-lg px-3.5 py-2 text-sm focus:ring-1 focus:ring-brand-secondary outline-none text-text-primary"
                     />
                   </div>

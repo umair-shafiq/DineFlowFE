@@ -116,3 +116,69 @@ export interface ReservationRequestDto {
   numberOfGuests?: number;
   reservationDateTime?: string;
 }
+
+export type PaymentStatus = 'UNPAID' | 'PAID' | string;
+export type PaymentMethod = 'CASH' | 'CARD' | 'ONLINE' | string;
+
+export interface InvoiceOrderItem {
+  orderItemId?: number;
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+  menuItem: {
+    id: number | string;
+    name: string;
+    description?: string;
+    price: number;
+    imageUrl?: string;
+    availabilityStatus?: string;
+    category?: {
+      id?: number | string;
+      name: string;
+    };
+  };
+}
+
+export interface InvoiceOrder {
+  orderId?: number;
+  orderNumber?: string;
+  orderStatus?: string;
+  orderType?: 'DINE_IN' | 'TAKEAWAY' | string;
+  createdAt?: string;
+  subtotal?: number;
+  taxAmount?: number;
+  totalAmount?: number;
+  restaurantTable?: {
+    restaurantTableId?: number;
+    tableNumber?: string;
+    capacity?: number;
+    tableStatus?: string;
+  };
+  orderItems?: InvoiceOrderItem[];
+}
+
+export interface Invoice {
+  invoiceId: number;
+  id?: number | string;
+  invoiceNumber: string;
+  createdAt: string;
+  paymentStatus: PaymentStatus;
+  subtotal: number;
+  taxAmount: number;
+  totalAmount: number;
+  order: InvoiceOrder;
+}
+
+export interface PaymentRecord {
+  paymentId?: number;
+  invoiceId: number;
+  amountPaid: number;
+  paymentMethod: PaymentMethod;
+  paidAt?: string;
+}
+
+export interface RecordPaymentPayload {
+  amountPaid: number;
+  paymentMethod: 'CASH' | 'CARD' | 'ONLINE' | string;
+}
+

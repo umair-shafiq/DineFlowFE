@@ -1,15 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { MenuItem, Modifier, Order, OrderItem, UserRole, RestaurantTable, TableStatus } from '../types';
-import { Plus, Minus, Clipboard, ShoppingCart, Check, Play, Ban, Sparkles, User, Hash, X, Search, Zap, RefreshCw, Eye, CheckCircle2, Utensils, ShoppingBag, Shield, UserCheck } from 'lucide-react';
-import { apiOrders, apiTables } from '../api';
+import { MenuItem, Modifier, Order, OrderItem, UserRole, RestaurantTable, TableStatus, Invoice } from '../types';
+import { Plus, Minus, Clipboard, ShoppingCart, Check, Play, Ban, Sparkles, User, Hash, X, Search, Zap, RefreshCw, Eye, CheckCircle2, Utensils, ShoppingBag, Shield, UserCheck, Receipt, CreditCard, Printer } from 'lucide-react';
+import { apiOrders, apiTables, apiInvoices } from '../api';
+import ReceiptView from './ReceiptView';
 
 interface OrdersViewProps {
   orders: Order[];
   items: MenuItem[];
   modifiers: Modifier[];
   tables?: RestaurantTable[];
+  invoices?: Invoice[];
   onOrdersChange: (updatedOrders: Order[]) => void;
   onTablesChange?: (updatedTables: RestaurantTable[]) => void;
+  onInvoicesChange?: (updatedInvoices: Invoice[]) => void;
+  onNavigateToInvoice?: (invoiceId: number | string, invoiceObj?: Invoice) => void;
   userRole?: UserRole;
 }
 
@@ -18,8 +22,11 @@ export default function OrdersView({
   items,
   modifiers,
   tables = [],
+  invoices = [],
   onOrdersChange,
   onTablesChange,
+  onInvoicesChange,
+  onNavigateToInvoice,
   userRole = 'ADMIN'
 }: OrdersViewProps) {
   const isWaiter = userRole === 'WAITER';
@@ -83,6 +90,109 @@ export default function OrdersView({
   const [searchError, setSearchError] = useState<string | null>(null);
   const [activeEndpointMode, setActiveEndpointMode] = useState<'all' | 'active'>('all');
   const [isLoadingActive, setIsLoadingActive] = useState(false);
+
+  // Invoicing States
+  const [generatingInvoiceOrderId, setGeneratingInvoiceOrderId] = useState<string | null>(null);
+  const [activeReceiptModalInvoice, setActiveReceiptModalInvoice] = useState<Invoice | null>(null);
+
+  // Helper to find existing invoice for an order
+  const getInvoiceForOrder = (order: Order): Invoice | undefined => {
+    const oId = order.orderId || order.id;
+    return (invoices || []).find(inv => 
+      (inv.order?.orderId && String(inv.order.orderId) === String(oId)) ||
+      (inv.order?.orderNumber && order.orderNumber && inv.order.orderNumber.toLowerCase() === order.orderNumber.toLowerCase())
+    );
+  };
+
+  // Generate Bill handler: calls POST /api/orders/{orderId}/invoice
+  const handleGenerateOrViewBill = async (order: Order) => {
+    const existing = getInvoiceForOrder(order);
+    if (existing) {
+      if (onNavigateToInvoice) {
+        onNavigateToInvoice(existing.invoiceId, existing);
+      } else {
+        setActiveReceiptModalInvoice(existing);
+      }
+      return;
+    }
+
+    const oId = order.orderId || order.id;
+    setGeneratingInvoiceOrderId(String(oId));
+
+    try {
+      // POST http://localhost:8080/api/orders/{orderId}/invoice with Authorization header
+      const createdInvoice = await apiInvoices.generateFromOrder(oId);
+      if (createdInvoice && createdInvoice.invoiceNumber) {
+        const updatedInvoicesList = [createdInvoice, ...(invoices || []).filter(i => i.invoiceId !== createdInvoice.invoiceId)];
+        if (onInvoicesChange) {
+          onInvoicesChange(updatedInvoicesList);
+        }
+        if (onNavigateToInvoice) {
+          onNavigateToInvoice(createdInvoice.invoiceId, createdInvoice);
+        } else {
+          setActiveReceiptModalInvoice(createdInvoice);
+        }
+      }
+    } catch (err: any) {
+      console.warn('API error during POST /api/orders/{orderId}/invoice, using local fallback invoice:', err);
+      // Construct fallback invoice matching response schema
+      const fallbackInvId = Math.floor(Math.random() * 90000) + 10000;
+      const subtotal = order.subtotal || order.items.reduce((s, it) => s + (it.price * it.quantity), 0);
+      const taxAmount = order.taxAmount !== undefined ? order.taxAmount : (subtotal * 0.15);
+      const totalAmount = order.totalAmount || order.total || (subtotal + taxAmount);
+      
+      const fallbackInvoice: Invoice = {
+        invoiceId: fallbackInvId,
+        id: fallbackInvId,
+        invoiceNumber: `INV-${order.orderId || fallbackInvId}${Math.floor(Math.random() * 1000000)}`,
+        createdAt: new Date().toISOString(),
+        paymentStatus: 'UNPAID',
+        subtotal: subtotal,
+        taxAmount: taxAmount,
+        totalAmount: totalAmount,
+        order: {
+          orderId: Number(order.orderId || order.id || fallbackInvId),
+          orderNumber: order.orderNumber,
+          orderStatus: order.status === 'completed' ? 'COMPLETED' : 'IN_PROGRESS',
+          orderType: order.orderType || 'DINE_IN',
+          createdAt: order.createdAt,
+          subtotal: subtotal,
+          taxAmount: taxAmount,
+          totalAmount: totalAmount,
+          restaurantTable: order.restaurantTable || (order.tableNumber ? {
+            restaurantTableId: order.restaurantTableId || 1,
+            tableNumber: order.tableNumber,
+            capacity: 4,
+            tableStatus: 'FREE'
+          } : undefined),
+          orderItems: order.items.map((it, idx) => ({
+            orderItemId: idx + 1,
+            quantity: it.quantity,
+            unitPrice: it.price,
+            subtotal: it.price * it.quantity,
+            menuItem: {
+              id: it.menuItemId || idx + 1,
+              name: it.name,
+              price: it.price,
+              availabilityStatus: 'AVAILABLE'
+            }
+          }))
+        }
+      };
+
+      const updatedInvoicesList = [fallbackInvoice, ...(invoices || [])];
+      if (onInvoicesChange) {
+        onInvoicesChange(updatedInvoicesList);
+      }
+      if (onNavigateToInvoice) {
+        onNavigateToInvoice(fallbackInvoice.invoiceId, fallbackInvoice);
+      } else {
+        setActiveReceiptModalInvoice(fallbackInvoice);
+      }
+    } finally {
+      setGeneratingInvoiceOrderId(null);
+    }
+  };
 
   // Auto-fetch live orders on initial mount
   useEffect(() => {
@@ -575,10 +685,35 @@ export default function OrdersView({
                   </div>
                 </div>
 
-                <div className="pt-2">
+                <div className="pt-2 flex gap-2">
+                  {searchedOrder.status !== 'cancelled' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleGenerateOrViewBill(searchedOrder);
+                        setSearchedOrder(null);
+                      }}
+                      disabled={generatingInvoiceOrderId === String(searchedOrder.orderId || searchedOrder.id)}
+                      className="flex-1 bg-brand-secondary hover:bg-brand-secondary-hover text-white font-bold h-10 rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm active-scale cursor-pointer"
+                    >
+                      {generatingInvoiceOrderId === String(searchedOrder.orderId || searchedOrder.id) ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          <span>Generating Bill...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Receipt className="w-4 h-4" />
+                          <span>
+                            {getInvoiceForOrder(searchedOrder) ? 'View Receipt / Bill' : 'Generate Bill'}
+                          </span>
+                        </>
+                      )}
+                    </button>
+                  )}
                   <button
                     onClick={() => setSearchedOrder(null)}
-                    className="w-full bg-brand-primary text-white font-bold h-10 rounded-xl hover:bg-brand-primary/90 transition-colors shadow-sm"
+                    className="flex-1 bg-surf-low hover:bg-surf-container border border-border-subtle text-text-primary font-bold h-10 rounded-xl transition-colors"
                   >
                     Close
                   </button>
@@ -724,15 +859,28 @@ export default function OrdersView({
                   </div>
 
                   {/* Actions Bar */}
-                  <div className="px-5 py-3 bg-white border-t border-border-subtle/50 flex gap-2">
+                  <div className="px-5 py-3 bg-white border-t border-border-subtle/50 flex flex-wrap gap-2">
                     {isWaiter ? (
-                      <button
-                        onClick={() => setSearchedOrder(order)}
-                        className="w-full bg-surf-container hover:bg-surf-high border border-border-subtle text-brand-primary font-bold py-2 rounded-lg text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                      >
-                        <Eye className="w-3.5 h-3.5 text-brand-secondary" />
-                        <span>Inspect Ticket Details</span>
-                      </button>
+                      <>
+                        <button
+                          onClick={() => setSearchedOrder(order)}
+                          className="flex-1 bg-surf-container hover:bg-surf-high border border-border-subtle text-brand-primary font-bold py-2 rounded-lg text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-brand-secondary" />
+                          <span>Inspect Ticket</span>
+                        </button>
+                        {order.status !== 'cancelled' && (
+                          <button
+                            onClick={() => handleGenerateOrViewBill(order)}
+                            disabled={generatingInvoiceOrderId === String(order.orderId || order.id)}
+                            className="px-3 py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 rounded-lg text-xs font-bold flex items-center gap-1 transition-all active-scale cursor-pointer"
+                            title="Generate/View Bill"
+                          >
+                            <Receipt className="w-3.5 h-3.5" />
+                            <span>{getInvoiceForOrder(order) ? 'Bill' : 'Generate Bill'}</span>
+                          </button>
+                        )}
+                      </>
                     ) : (
                       <>
                         {order.status === 'pending' && (
@@ -745,8 +893,17 @@ export default function OrdersView({
                               <span>Start Cooking</span>
                             </button>
                             <button
+                              onClick={() => handleGenerateOrViewBill(order)}
+                              disabled={generatingInvoiceOrderId === String(order.orderId || order.id)}
+                              className="px-2.5 py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors active-scale cursor-pointer"
+                              title="Generate Bill"
+                            >
+                              <Receipt className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">{getInvoiceForOrder(order) ? 'Bill' : 'Bill'}</span>
+                            </button>
+                            <button
                               onClick={() => handleAdvanceStatus(order.id, 'cancelled')}
-                              className="px-3 py-2 bg-brand-accent-red/5 text-brand-accent-red rounded-lg text-xs hover:bg-brand-accent-red/10 transition-colors active-scale cursor-pointer"
+                              className="px-2.5 py-2 bg-brand-accent-red/5 text-brand-accent-red rounded-lg text-xs hover:bg-brand-accent-red/10 transition-colors active-scale cursor-pointer"
                               title="Cancel Order"
                             >
                               <Ban className="w-3.5 h-3.5" />
@@ -764,21 +921,50 @@ export default function OrdersView({
                               <span>Complete Ticket</span>
                             </button>
                             <button
+                              onClick={() => handleGenerateOrViewBill(order)}
+                              disabled={generatingInvoiceOrderId === String(order.orderId || order.id)}
+                              className="px-2.5 py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors active-scale cursor-pointer"
+                              title="Generate Bill"
+                            >
+                              <Receipt className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">Bill</span>
+                            </button>
+                            <button
                               onClick={() => handleAdvanceStatus(order.id, 'cancelled')}
-                              className="px-3 py-2 bg-brand-accent-red/5 text-brand-accent-red rounded-lg text-xs hover:bg-brand-accent-red/10 transition-colors active-scale cursor-pointer"
+                              className="px-2.5 py-2 bg-brand-accent-red/5 text-brand-accent-red rounded-lg text-xs hover:bg-brand-accent-red/10 transition-colors active-scale cursor-pointer"
                             >
                               <Ban className="w-3.5 h-3.5" />
                             </button>
                           </>
                         )}
 
-                        {(order.status === 'completed' || order.status === 'cancelled') && (
+                        {order.status === 'completed' && (
+                          <div className="flex items-center gap-2 w-full">
+                            <button
+                              onClick={() => setSearchedOrder(order)}
+                              className="flex-1 text-xs font-bold text-text-secondary hover:text-brand-primary bg-surf-low hover:bg-surf-container py-2 rounded-lg border border-border-subtle flex items-center justify-center gap-1.5 cursor-pointer"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>Ticket Details</span>
+                            </button>
+                            <button
+                              onClick={() => handleGenerateOrViewBill(order)}
+                              disabled={generatingInvoiceOrderId === String(order.orderId || order.id)}
+                              className="flex-1 bg-brand-primary hover:bg-brand-primary/90 text-white font-bold py-2 rounded-lg text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs active-scale cursor-pointer"
+                            >
+                              <Receipt className="w-3.5 h-3.5 text-indigo-300" />
+                              <span>{getInvoiceForOrder(order) ? 'View Bill' : 'Generate Bill'}</span>
+                            </button>
+                          </div>
+                        )}
+
+                        {order.status === 'cancelled' && (
                           <button
                             onClick={() => setSearchedOrder(order)}
                             className="text-center w-full text-xs font-bold text-text-secondary hover:text-brand-primary py-1.5 flex items-center justify-center gap-1.5 cursor-pointer"
                           >
                             <Eye className="w-3.5 h-3.5" />
-                            <span>View Ticket Summary</span>
+                            <span>View Cancelled Ticket</span>
                           </button>
                         )}
                       </>
@@ -789,6 +975,21 @@ export default function OrdersView({
             })}
           </div>
         </div>
+      )}
+
+      {/* Modal Receipt Preview if active */}
+      {activeReceiptModalInvoice && (
+        <ReceiptView
+          invoice={activeReceiptModalInvoice}
+          isModal
+          onClose={() => setActiveReceiptModalInvoice(null)}
+          onInvoiceUpdated={(updated) => {
+            setActiveReceiptModalInvoice(updated);
+            if (onInvoicesChange && invoices) {
+              onInvoicesChange(invoices.map(i => i.invoiceId === updated.invoiceId ? updated : i));
+            }
+          }}
+        />
       )}
 
       {/* DISPLAY MODE 2: SIMULATION WAITER / CART TERMINAL */}
