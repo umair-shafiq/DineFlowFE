@@ -6,6 +6,7 @@ import {
   Search, 
   Shield, 
   UserCheck, 
+  ChefHat,
   CheckCircle, 
   XCircle, 
   Edit2, 
@@ -32,7 +33,7 @@ interface UsersViewProps {
 export default function UsersView({ users, onUsersChange, apiEnabled = false }: UsersViewProps) {
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
-  const [roleFilter, setRoleFilter] = useState<'ALL' | 'ADMIN' | 'WAITER'>('ALL');
+  const [roleFilter, setRoleFilter] = useState<'ALL' | 'ADMIN' | 'WAITER' | 'CHEF'>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
   
   // Modals
@@ -240,6 +241,7 @@ export default function UsersView({ users, onUsersChange, apiEnabled = false }: 
   });
 
   const totalAdmins = users.filter(u => u.userRole === 'ADMIN').length;
+  const totalChefs = users.filter(u => u.userRole === 'CHEF').length;
   const totalWaiters = users.filter(u => u.userRole === 'WAITER').length;
   const totalActive = users.filter(u => u.userStatus).length;
 
@@ -257,7 +259,7 @@ export default function UsersView({ users, onUsersChange, apiEnabled = false }: 
             </h1>
           </div>
           <p className="font-sans text-xs text-text-secondary mt-1">
-            Create, manage roles, and toggle access for Admin and Waiter personnel.
+            Create, manage roles, and toggle access for Admin, Chef, and Waiter personnel.
           </p>
         </div>
 
@@ -301,18 +303,22 @@ export default function UsersView({ users, onUsersChange, apiEnabled = false }: 
       )}
 
       {/* Stats Summary Bento Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4" id="users-stats-grid">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3" id="users-stats-grid">
         <div className="bg-white border border-border-subtle rounded-2xl p-4 shadow-xs">
           <p className="font-mono text-[10px] uppercase font-bold text-text-secondary tracking-wider">Total Users</p>
           <p className="font-display text-2xl font-black text-brand-primary mt-1">{users.length}</p>
         </div>
         <div className="bg-white border border-border-subtle rounded-2xl p-4 shadow-xs">
-          <p className="font-mono text-[10px] uppercase font-bold text-text-secondary tracking-wider">Active Personnel</p>
+          <p className="font-mono text-[10px] uppercase font-bold text-text-secondary tracking-wider">Active Staff</p>
           <p className="font-display text-2xl font-black text-emerald-600 mt-1">{totalActive}</p>
         </div>
         <div className="bg-white border border-border-subtle rounded-2xl p-4 shadow-xs">
           <p className="font-mono text-[10px] uppercase font-bold text-text-secondary tracking-wider">Admins</p>
           <p className="font-display text-2xl font-black text-indigo-600 mt-1">{totalAdmins}</p>
+        </div>
+        <div className="bg-white border border-border-subtle rounded-2xl p-4 shadow-xs">
+          <p className="font-mono text-[10px] uppercase font-bold text-text-secondary tracking-wider">Chefs</p>
+          <p className="font-display text-2xl font-black text-emerald-700 mt-1">{totalChefs}</p>
         </div>
         <div className="bg-white border border-border-subtle rounded-2xl p-4 shadow-xs">
           <p className="font-mono text-[10px] uppercase font-bold text-text-secondary tracking-wider">Waiters</p>
@@ -358,13 +364,19 @@ export default function UsersView({ users, onUsersChange, apiEnabled = false }: 
                 onClick={() => setRoleFilter('ALL')}
                 className={`px-3 py-1 rounded-lg transition-all ${roleFilter === 'ALL' ? 'bg-white shadow-xs font-bold text-brand-primary' : 'text-text-secondary hover:text-text-primary'}`}
               >
-                All Roles
+                All
               </button>
               <button
                 onClick={() => setRoleFilter('ADMIN')}
                 className={`px-3 py-1 rounded-lg transition-all ${roleFilter === 'ADMIN' ? 'bg-white shadow-xs font-bold text-indigo-700' : 'text-text-secondary hover:text-text-primary'}`}
               >
                 Admins
+              </button>
+              <button
+                onClick={() => setRoleFilter('CHEF')}
+                className={`px-3 py-1 rounded-lg transition-all ${roleFilter === 'CHEF' ? 'bg-white shadow-xs font-bold text-emerald-700' : 'text-text-secondary hover:text-text-primary'}`}
+              >
+                Chefs
               </button>
               <button
                 onClick={() => setRoleFilter('WAITER')}
@@ -451,9 +463,17 @@ export default function UsersView({ users, onUsersChange, apiEnabled = false }: 
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-[11px] font-bold uppercase ${
                         user.userRole === 'ADMIN'
                           ? 'bg-indigo-50 text-indigo-700 border border-indigo-200/80'
+                          : user.userRole === 'CHEF'
+                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-200/80'
                           : 'bg-amber-50 text-amber-800 border border-amber-200/80'
                       }`}>
-                        {user.userRole === 'ADMIN' ? <Shield className="w-3 h-3" /> : <UserCheck className="w-3 h-3" />}
+                        {user.userRole === 'ADMIN' ? (
+                          <Shield className="w-3 h-3" />
+                        ) : user.userRole === 'CHEF' ? (
+                          <ChefHat className="w-3 h-3 text-emerald-600" />
+                        ) : (
+                          <UserCheck className="w-3 h-3" />
+                        )}
                         <span>{user.userRole}</span>
                       </span>
                     </td>
@@ -572,26 +592,41 @@ export default function UsersView({ users, onUsersChange, apiEnabled = false }: 
               {/* Role Selector */}
               <div className="space-y-1">
                 <label className="font-mono text-[11px] font-bold text-text-secondary uppercase">Assign Role</label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <button
+                    id="add-user-role-admin-btn"
                     type="button"
                     onClick={() => setNewRole('ADMIN')}
-                    className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                    className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
                       newRole === 'ADMIN'
-                        ? 'bg-indigo-50 border-indigo-300 text-indigo-800 shadow-xs'
-                        : 'bg-surf-low border-border-subtle text-text-secondary'
+                        ? 'bg-indigo-50 border-indigo-300 text-indigo-800 shadow-xs ring-1 ring-indigo-400'
+                        : 'bg-surf-low border-border-subtle text-text-secondary hover:bg-surf-container'
                     }`}
                   >
                     <Shield className="w-3.5 h-3.5 text-indigo-600" />
                     <span>ADMIN</span>
                   </button>
                   <button
+                    id="add-user-role-chef-btn"
+                    type="button"
+                    onClick={() => setNewRole('CHEF')}
+                    className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                      newRole === 'CHEF'
+                        ? 'bg-emerald-50 border-emerald-300 text-emerald-800 shadow-xs ring-1 ring-emerald-400'
+                        : 'bg-surf-low border-border-subtle text-text-secondary hover:bg-surf-container'
+                    }`}
+                  >
+                    <ChefHat className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>CHEF</span>
+                  </button>
+                  <button
+                    id="add-user-role-waiter-btn"
                     type="button"
                     onClick={() => setNewRole('WAITER')}
-                    className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                    className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
                       newRole === 'WAITER'
-                        ? 'bg-amber-50 border-amber-300 text-amber-800 shadow-xs'
-                        : 'bg-surf-low border-border-subtle text-text-secondary'
+                        ? 'bg-amber-50 border-amber-300 text-amber-800 shadow-xs ring-1 ring-amber-400'
+                        : 'bg-surf-low border-border-subtle text-text-secondary hover:bg-surf-container'
                     }`}
                   >
                     <UserCheck className="w-3.5 h-3.5 text-amber-600" />
@@ -679,26 +714,41 @@ export default function UsersView({ users, onUsersChange, apiEnabled = false }: 
               {/* Role Selector */}
               <div className="space-y-1">
                 <label className="font-mono text-[11px] font-bold text-text-secondary uppercase">Role</label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <button
+                    id="edit-user-role-admin-btn"
                     type="button"
                     onClick={() => setEditRole('ADMIN')}
-                    className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                    className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
                       editRole === 'ADMIN'
-                        ? 'bg-indigo-50 border-indigo-300 text-indigo-800 shadow-xs'
-                        : 'bg-surf-low border-border-subtle text-text-secondary'
+                        ? 'bg-indigo-50 border-indigo-300 text-indigo-800 shadow-xs ring-1 ring-indigo-400'
+                        : 'bg-surf-low border-border-subtle text-text-secondary hover:bg-surf-container'
                     }`}
                   >
                     <Shield className="w-3.5 h-3.5 text-indigo-600" />
                     <span>ADMIN</span>
                   </button>
                   <button
+                    id="edit-user-role-chef-btn"
+                    type="button"
+                    onClick={() => setEditRole('CHEF')}
+                    className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                      editRole === 'CHEF'
+                        ? 'bg-emerald-50 border-emerald-300 text-emerald-800 shadow-xs ring-1 ring-emerald-400'
+                        : 'bg-surf-low border-border-subtle text-text-secondary hover:bg-surf-container'
+                    }`}
+                  >
+                    <ChefHat className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>CHEF</span>
+                  </button>
+                  <button
+                    id="edit-user-role-waiter-btn"
                     type="button"
                     onClick={() => setEditRole('WAITER')}
-                    className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                    className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
                       editRole === 'WAITER'
-                        ? 'bg-amber-50 border-amber-300 text-amber-800 shadow-xs'
-                        : 'bg-surf-low border-border-subtle text-text-secondary'
+                        ? 'bg-amber-50 border-amber-300 text-amber-800 shadow-xs ring-1 ring-amber-400'
+                        : 'bg-surf-low border-border-subtle text-text-secondary hover:bg-surf-container'
                     }`}
                   >
                     <UserCheck className="w-3.5 h-3.5 text-amber-600" />

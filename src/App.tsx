@@ -12,8 +12,9 @@ import TablesView from './components/TablesView';
 import ReservationsView from './components/ReservationsView';
 import InvoicesView from './components/InvoicesView';
 import LoginView from './components/LoginView';
+import ChefDashboard from './components/ChefDashboard';
 
-import { MenuItem, Category, Modifier, Order, AuthUser, User, RestaurantTable, Reservation, Invoice } from './types';
+import { MenuItem, Category, Modifier, Order, AuthUser, User, RestaurantTable, Reservation, Invoice, KitchenOrder } from './types';
 import {
   INITIAL_MENU_ITEMS,
   INITIAL_CATEGORIES,
@@ -23,6 +24,7 @@ import {
   INITIAL_TABLES,
   INITIAL_RESERVATIONS,
   INITIAL_INVOICES,
+  INITIAL_KITCHEN_ORDERS,
   loadData,
   saveData
 } from './data';
@@ -37,6 +39,7 @@ import {
   apiTables,
   apiReservations,
   apiInvoices,
+  apiKitchen,
   setAuthToken,
   setOnUnauthorizedCallback
 } from './api';
@@ -83,6 +86,7 @@ export default function App() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>(() => loadData<Invoice[]>('chef_invoices', INITIAL_INVOICES));
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | string | null>(null);
+  const [kitchenOrders, setKitchenOrders] = useState<KitchenOrder[]>(() => loadData<KitchenOrder[]>('chef_kitchen_orders', INITIAL_KITCHEN_ORDERS));
 
   // Spring Boot Integration States
   const [apiSettings, setApiSettings] = useState<SpringBootSettings>(getApiSettings());
@@ -131,7 +135,7 @@ export default function App() {
     setApiSettings(activeSettings);
     saveApiSettings(activeSettings);
 
-    const targetTab = user.userRole === 'ADMIN' ? 'reports' : 'orders';
+    const targetTab = user.userRole === 'ADMIN' ? 'reports' : (user.userRole === 'CHEF' ? 'kitchen' : 'orders');
     setCurrentTab(targetTab);
     try {
       localStorage.setItem('dineflow_active_tab', targetTab);
@@ -269,7 +273,30 @@ export default function App() {
         setInvoices(loadData<Invoice[]>('chef_invoices', INITIAL_INVOICES));
       }
 
-      if (isWaiterUser) {
+      // 8. Fetch Kitchen Orders (GET /api/kitchen/orders) - Chef and Admin
+      const isChefUser = effectiveUser?.userRole === 'CHEF';
+      if (effectiveUser && (effectiveUser.userRole === 'CHEF' || effectiveUser.userRole === 'ADMIN')) {
+        try {
+          const fetchedKitchen = await apiKitchen.getOrders();
+          if (Array.isArray(fetchedKitchen) && fetchedKitchen.length > 0) {
+            setKitchenOrders(fetchedKitchen);
+          } else {
+            setKitchenOrders(loadData<KitchenOrder[]>('chef_kitchen_orders', INITIAL_KITCHEN_ORDERS));
+          }
+        } catch (err) {
+          setKitchenOrders(loadData<KitchenOrder[]>('chef_kitchen_orders', INITIAL_KITCHEN_ORDERS));
+        }
+      } else {
+        setKitchenOrders(loadData<KitchenOrder[]>('chef_kitchen_orders', INITIAL_KITCHEN_ORDERS));
+      }
+
+      if (isChefUser) {
+        setApiConnected(true);
+        setApiStatusMessage({
+          type: 'success',
+          text: `Connected to Spring Boot Kitchen Display System! Active preparation queue ready.`
+        });
+      } else if (isWaiterUser) {
         if (ordersSuccess) {
           setApiConnected(true);
           setApiStatusMessage({
@@ -314,6 +341,7 @@ export default function App() {
       setTables(loadData<RestaurantTable[]>('chef_tables', INITIAL_TABLES));
       setReservations(loadData<Reservation[]>('chef_reservations', INITIAL_RESERVATIONS));
       setInvoices(loadData<Invoice[]>('chef_invoices', INITIAL_INVOICES));
+      setKitchenOrders(loadData<KitchenOrder[]>('chef_kitchen_orders', INITIAL_KITCHEN_ORDERS));
       setApiConnected(null);
       setIsApiLoading(false);
     }
@@ -322,6 +350,11 @@ export default function App() {
   useEffect(() => {
     loadAllData();
   }, []);
+
+  const handleKitchenOrdersChange = (updatedOrders: KitchenOrder[]) => {
+    setKitchenOrders(updatedOrders);
+    saveData('chef_kitchen_orders', updatedOrders);
+  };
 
   // Save changes to localStorage or sync with Spring Boot
   const handleItemsChange = async (updatedItems: MenuItem[]) => {
@@ -543,9 +576,18 @@ export default function App() {
   }
 
   const isAdmin = currentUser.userRole === 'ADMIN';
+  const isChef = currentUser.userRole === 'CHEF';
 
-  // Role-based view authorization: WAITER is locked strictly to 'orders' view
-  const safeTab = (!isAdmin && currentTab !== 'orders') ? 'orders' : currentTab;
+  // Role-based view authorization:
+  // - CHEF is authorized to access 'kitchen' view
+  // - WAITER is locked strictly to 'orders' view
+  // - ADMIN has access to all views including 'kitchen'
+  let safeTab = currentTab;
+  if (isChef) {
+    safeTab = 'kitchen';
+  } else if (!isAdmin && currentTab !== 'orders') {
+    safeTab = 'orders';
+  }
 
   return (
     <div className="flex min-h-screen bg-surf-bg text-text-primary font-sans" id="chef-app-root">
@@ -577,6 +619,15 @@ export default function App() {
 
         {/* Core Tab Routing Pages */}
         <main className="flex-1 pb-12" id="chef-content-stage">
+          {safeTab === 'kitchen' && (isAdmin || isChef) && (
+            <ChefDashboard
+              orders={kitchenOrders}
+              onOrdersChange={handleKitchenOrdersChange}
+              currentUser={currentUser}
+              apiEnabled={apiSettings.enabled}
+            />
+          )}
+
           {safeTab === 'menu-items' && isAdmin && (
             <MenuItemsView
               items={items}

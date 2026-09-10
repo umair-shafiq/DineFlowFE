@@ -1,4 +1,4 @@
-import { MenuItem, Category, Modifier, Order, User, RestaurantTable, Reservation, Invoice } from './types';
+import { MenuItem, Category, Modifier, Order, User, RestaurantTable, Reservation, Invoice, KitchenOrder } from './types';
 
 export const INITIAL_CATEGORIES: Category[] = [
   { id: 'cat-1', name: 'Appetizers' },
@@ -203,6 +203,14 @@ export const INITIAL_USERS: User[] = [
     createdAt: '2026-08-19T14:52:07'
   },
   {
+    userId: 6,
+    fullName: 'Chef Gordon',
+    email: 'chef@dineflow.com',
+    userRole: 'CHEF',
+    userStatus: true,
+    createdAt: '2026-09-08T10:00:00'
+  },
+  {
     userId: 1,
     fullName: 'Ibrahim',
     email: 'ibrahim@example.com',
@@ -377,6 +385,61 @@ export const INITIAL_INVOICES: Invoice[] = [
   }
 ];
 
+
+// Initial Kitchen Orders matching backend API contract
+export const INITIAL_KITCHEN_ORDERS: KitchenOrder[] = [
+  {
+    orderId: 43,
+    orderNumber: "ORD-20260908-2B47",
+    orderType: "DINE_IN",
+    tableNumber: "T-01",
+    createdAt: "2026-09-08T19:16:23",
+    items: [
+      {
+        orderItemId: 85,
+        menuItemName: "Burger",
+        quantity: 1,
+        itemStatus: "READY"
+      }
+    ]
+  },
+  {
+    orderId: 44,
+    orderNumber: "ORD-20260908-3C12",
+    orderType: "DINE_IN",
+    tableNumber: "T-04",
+    createdAt: new Date(Date.now() - 15 * 60000).toISOString(),
+    items: [
+      {
+        orderItemId: 86,
+        menuItemName: "Wild Salmon Fillet",
+        quantity: 2,
+        itemStatus: "COOKING"
+      },
+      {
+        orderItemId: 87,
+        menuItemName: "Matcha Lava Cake",
+        quantity: 1,
+        itemStatus: "PENDING"
+      }
+    ]
+  },
+  {
+    orderId: 45,
+    orderNumber: "ORD-20260908-9F81",
+    orderType: "TAKEAWAY",
+    tableNumber: "Takeaway",
+    createdAt: new Date(Date.now() - 6 * 60000).toISOString(),
+    items: [
+      {
+        orderItemId: 88,
+        menuItemName: "Truffle Mushroom Risotto",
+        quantity: 1,
+        itemStatus: "PENDING"
+      }
+    ]
+  }
+];
 
 // Helper to load items
 export function loadData<T>(key: string, initial: T): T {

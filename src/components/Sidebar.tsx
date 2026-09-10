@@ -26,10 +26,12 @@ interface SidebarProps {
 
 export default function Sidebar({ currentTab, onTabChange, currentUser, onLogout }: SidebarProps) {
   const isAdmin = currentUser?.userRole === 'ADMIN';
+  const isChef = currentUser?.userRole === 'CHEF';
 
-  // Admin sees full suite of tools; Waiter sees only Orders (view only)
+  // Admin sees full suite of tools; Chef sees Kitchen Display; Waiter sees Orders Terminal
   const adminMenuItems = [
     { id: 'reports', label: 'Dashboard', icon: BarChart3 },
+    { id: 'kitchen', label: 'Kitchen Display (Chef)', icon: ChefHat },
     { id: 'orders', label: 'Orders Terminal', icon: ClipboardList },
     { id: 'invoices', label: 'Invoices & Receipts', icon: Receipt },
     { id: 'reservations', label: 'Reservations', icon: CalendarClock },
@@ -40,11 +42,15 @@ export default function Sidebar({ currentTab, onTabChange, currentUser, onLogout
     { id: 'users', label: 'User Staff', icon: Users },
   ];
 
+  const chefMenuItems = [
+    { id: 'kitchen', label: 'Kitchen Orders Queue', icon: ChefHat },
+  ];
+
   const waiterMenuItems = [
     { id: 'orders', label: 'Live Orders Queue', icon: ClipboardList },
   ];
 
-  const menuItems = isAdmin ? adminMenuItems : waiterMenuItems;
+  const menuItems = isAdmin ? adminMenuItems : (isChef ? chefMenuItems : waiterMenuItems);
 
   const bottomItems = isAdmin ? [
     { id: 'support', label: 'API & Settings', icon: HelpCircle },
@@ -66,7 +72,7 @@ export default function Sidebar({ currentTab, onTabChange, currentUser, onLogout
               DineFlow
             </h2>
             <p className="font-mono text-[10px] uppercase tracking-wider text-text-secondary">
-              {isAdmin ? 'Admin Console' : 'Waiter Station'}
+              {isAdmin ? 'Admin Console' : (isChef ? 'Kitchen Station' : 'Waiter Station')}
             </p>
           </div>
         </div>
@@ -84,12 +90,12 @@ export default function Sidebar({ currentTab, onTabChange, currentUser, onLogout
                 {currentUser.fullName || currentUser.email.split('@')[0]}
               </p>
               <div className="flex items-center gap-1 mt-0.5">
-                <span className={`inline-flex items-center gap-1 text-[9px] font-mono font-bold px-1.5 py-0.2 rounded uppercase ${
+                <span className={`inline-flex items-center gap-1 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded uppercase ${
                   isAdmin 
                     ? 'bg-indigo-100 text-indigo-800' 
-                    : 'bg-amber-100 text-amber-800'
+                    : (isChef ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800')
                 }`}>
-                  {isAdmin ? <Shield className="w-2.5 h-2.5" /> : <UserCheck className="w-2.5 h-2.5" />}
+                  {isAdmin ? <Shield className="w-2.5 h-2.5" /> : (isChef ? <ChefHat className="w-2.5 h-2.5" /> : <UserCheck className="w-2.5 h-2.5" />)}
                   <span>{currentUser.userRole}</span>
                 </span>
               </div>

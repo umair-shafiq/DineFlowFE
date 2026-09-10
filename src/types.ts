@@ -63,7 +63,7 @@ export interface Order {
   customerName?: string;
 }
 
-export type UserRole = 'ADMIN' | 'WAITER';
+export type UserRole = 'ADMIN' | 'WAITER' | 'CHEF';
 
 export type TableStatus = 'FREE' | 'OCCUPIED' | 'RESERVED' | string;
 
@@ -180,5 +180,23 @@ export interface PaymentRecord {
 export interface RecordPaymentPayload {
   amountPaid: number;
   paymentMethod: 'CASH' | 'CARD' | 'ONLINE' | string;
+}
+
+export type KitchenItemStatus = 'PENDING' | 'COOKING' | 'READY';
+
+export interface KitchenOrderItem {
+  orderItemId: number;
+  menuItemName: string;
+  quantity: number;
+  itemStatus: KitchenItemStatus;
+}
+
+export interface KitchenOrder {
+  orderId: number;
+  orderNumber: string;
+  orderType?: 'DINE_IN' | 'TAKEAWAY' | string;
+  tableNumber: string;
+  createdAt: string;
+  items: KitchenOrderItem[];
 }
 

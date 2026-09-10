@@ -29,10 +29,12 @@ export default function Header({
   onLogout
 }: HeaderProps) {
   const isAdmin = currentUser?.userRole === 'ADMIN';
+  const isChef = currentUser?.userRole === 'CHEF';
   
-  // Mapping of main top bar links to internal navigation states (for Admin)
+  // Mapping of main top bar links to internal navigation states (for Admin, Chef, Waiter)
   const adminNavLinks = [
     { id: 'dashboard', label: 'Dashboard', target: 'reports' },
+    { id: 'kitchen', label: 'Kitchen', target: 'kitchen' },
     { id: 'orders', label: 'Orders', target: 'orders' },
     { id: 'invoices', label: 'Invoices', target: 'invoices' },
     { id: 'reservations', label: 'Reservations', target: 'reservations' },
@@ -41,14 +43,19 @@ export default function Header({
     { id: 'users', label: 'Staff', target: 'users' },
   ];
 
+  const chefNavLinks = [
+    { id: 'kitchen', label: 'Kitchen Queue', target: 'kitchen' },
+  ];
+
   const waiterNavLinks = [
     { id: 'orders', label: 'Live Orders', target: 'orders' },
   ];
 
-  const navLinks = isAdmin ? adminNavLinks : waiterNavLinks;
+  const navLinks = isAdmin ? adminNavLinks : (isChef ? chefNavLinks : waiterNavLinks);
 
   // Detect which top-link is "active" based on currentTab
   const getActiveNavLink = () => {
+    if (currentTab === 'kitchen') return 'kitchen';
     if (currentTab === 'menu-items' || currentTab === 'categories' || currentTab === 'modifiers') return 'inventory';
     if (currentTab === 'reports') return 'dashboard';
     if (currentTab === 'orders') return 'orders';
@@ -57,7 +64,7 @@ export default function Header({
     if (currentTab === 'tables') return 'tables';
     if (currentTab === 'users') return 'users';
     if (currentTab === 'support') return 'settings';
-    return 'dashboard';
+    return isChef ? 'kitchen' : (isAdmin ? 'dashboard' : 'orders');
   };
 
   const activeLink = getActiveNavLink();
@@ -70,7 +77,7 @@ export default function Header({
       {/* Brand & Inline Tabs */}
       <div className="flex items-center gap-8" id="header-left">
         <span 
-          onClick={() => onTabChange(isAdmin ? 'reports' : 'orders')}
+          onClick={() => onTabChange(isAdmin ? 'reports' : (isChef ? 'kitchen' : 'orders'))}
           className="font-display text-xl font-black text-brand-primary tracking-tight cursor-pointer hover:opacity-85 select-none flex items-center gap-2"
         >
           <span>DineFlow</span>

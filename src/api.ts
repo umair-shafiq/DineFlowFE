@@ -1,4 +1,25 @@
-import { MenuItem, Category, Order, OrderItem, User, UserRole, AuthUser, RestaurantTable, TableStatus, Reservation, ReservationStatus, ReservationRequestDto, Invoice, PaymentRecord, RecordPaymentPayload, PaymentStatus, PaymentMethod } from './types';
+import { 
+  MenuItem, 
+  Category, 
+  Order, 
+  OrderItem, 
+  User, 
+  UserRole, 
+  AuthUser, 
+  RestaurantTable, 
+  TableStatus, 
+  Reservation, 
+  ReservationStatus, 
+  ReservationRequestDto, 
+  Invoice, 
+  PaymentRecord, 
+  RecordPaymentPayload, 
+  PaymentStatus, 
+  PaymentMethod,
+  KitchenOrder,
+  KitchenOrderItem,
+  KitchenItemStatus
+} from './types';
 
 export interface SpringBootSettings {
   enabled: boolean;
@@ -11,6 +32,8 @@ export interface SpringBootSettings {
   tablesPath?: string;
   reservationsPath?: string;
   invoicesPath?: string;
+  kitchenOrdersPath?: string;
+  kitchenItemsPath?: string;
 }
 
 const SETTINGS_KEY = 'spring_boot_connector_settings';
@@ -25,21 +48,83 @@ const DEFAULT_SETTINGS: SpringBootSettings = {
   authPath: '/api/auth',
   tablesPath: '/api/tables',
   reservationsPath: '/api/reservations',
-  invoicesPath: '/api/invoices'
+  invoicesPath: '/api/invoices',
+  kitchenOrdersPath: '/api/kitchen/orders',
+  kitchenItemsPath: '/api/kitchen/order-items'
 };
 
 // JWT token storage with localStorage persistence across page reloads
 const JWT_STORAGE_KEY = 'dineflow_jwt_token';
+const AUTH_USER_STORAGE_KEY = 'dineflow_auth_user';
+const LOGIN_TIMESTAMP_KEY = 'dineflow_login_timestamp';
+
 let inMemoryJwtToken: string | null = null;
 let onUnauthorizedCallback: ((message?: string) => void) | null = null;
+
+export function clearAuthStorage(): void {
+  inMemoryJwtToken = null;
+  try {
+    localStorage.removeItem(JWT_STORAGE_KEY);
+    localStorage.removeItem(AUTH_USER_STORAGE_KEY);
+    localStorage.removeItem(LOGIN_TIMESTAMP_KEY);
+  } catch {}
+}
+
+/**
+ * Validates if a JWT token has expired based on its encoded payload exp claim
+ * or a 24-hour limit fallback from when the session was created.
+ */
+export function isJwtExpired(token: string | null): boolean {
+  if (!token) return true;
+  try {
+    const parts = token.split('.');
+    if (parts.length === 3) {
+      const base64Url = parts[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(
+        atob(base64)
+          .split('')
+          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
+      const parsed = JSON.parse(jsonPayload);
+      if (parsed.exp && typeof parsed.exp === 'number') {
+        const currentTime = Math.floor(Date.now() / 1000);
+        // Expiration check with 5s buffer
+        if (currentTime >= parsed.exp - 5) {
+          return true;
+        }
+      }
+    }
+  } catch {
+    // Decoding failed or non-standard token; check timestamp fallback
+  }
+
+  // Fallback 24-hour expiration check
+  try {
+    const savedTime = localStorage.getItem(LOGIN_TIMESTAMP_KEY);
+    if (savedTime) {
+      const loginTime = parseInt(savedTime, 10);
+      const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+      if (Date.now() - loginTime >= TWENTY_FOUR_HOURS_MS) {
+        return true;
+      }
+    }
+  } catch {}
+
+  return false;
+}
 
 export function setAuthToken(token: string | null): void {
   inMemoryJwtToken = token;
   try {
     if (token) {
       localStorage.setItem(JWT_STORAGE_KEY, token);
+      if (!localStorage.getItem(LOGIN_TIMESTAMP_KEY)) {
+        localStorage.setItem(LOGIN_TIMESTAMP_KEY, String(Date.now()));
+      }
     } else {
-      localStorage.removeItem(JWT_STORAGE_KEY);
+      clearAuthStorage();
     }
   } catch {
     // ignore storage quota/security errors
@@ -47,10 +132,20 @@ export function setAuthToken(token: string | null): void {
 }
 
 export function getAuthToken(): string | null {
-  if (inMemoryJwtToken) return inMemoryJwtToken;
+  if (inMemoryJwtToken) {
+    if (isJwtExpired(inMemoryJwtToken)) {
+      clearAuthStorage();
+      return null;
+    }
+    return inMemoryJwtToken;
+  }
   try {
     const stored = localStorage.getItem(JWT_STORAGE_KEY);
     if (stored) {
+      if (isJwtExpired(stored)) {
+        clearAuthStorage();
+        return null;
+      }
       inMemoryJwtToken = stored;
       return stored;
     }
@@ -92,6 +187,12 @@ export function getApiSettings(): SpringBootSettings {
       }
       if (!parsed.invoicesPath) {
         parsed.invoicesPath = '/api/invoices';
+      }
+      if (!parsed.kitchenOrdersPath) {
+        parsed.kitchenOrdersPath = '/api/kitchen/orders';
+      }
+      if (!parsed.kitchenItemsPath) {
+        parsed.kitchenItemsPath = '/api/kitchen/order-items';
       }
       if (parsed.enabled === undefined) {
         parsed.enabled = true;
@@ -176,14 +277,30 @@ async function apiRequest<T>(endpointPath: string, method: string = 'GET', body?
     throw new Error('Spring Boot Live Integration is currently disabled.');
   }
 
+  // Pre-flight check: If JWT is expired (24h or exp claim), proactively terminate session
+  if (inMemoryJwtToken && isJwtExpired(inMemoryJwtToken)) {
+    clearAuthStorage();
+    if (onUnauthorizedCallback) {
+      onUnauthorizedCallback('Your session has expired (24-hour limit). Please log in again.');
+    }
+    const err = new Error('Session expired (24 hours). Please log in again.') as any;
+    err.status = 401;
+    err.isSessionExpired = true;
+    throw err;
+  }
+
   const baseUrlSanitized = settings.baseUrl.replace(/\/$/, '');
   const pathSanitized = endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`;
   const url = `${baseUrlSanitized}${pathSanitized}`;
 
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
     'Accept': 'application/json'
   };
+
+  // Only attach Content-Type if there is a body payload
+  if (body !== undefined && method !== 'GET' && method !== 'DELETE') {
+    headers['Content-Type'] = 'application/json';
+  }
 
   // Inject in-memory JWT token into Authorization header for all API calls
   if (inMemoryJwtToken) {
@@ -221,11 +338,11 @@ async function apiRequest<T>(endpointPath: string, method: string = 'GET', body?
 
   // Handle 401 Unauthorized (invalid or expired session)
   if (response.status === 401) {
-    inMemoryJwtToken = null;
+    clearAuthStorage();
     if (onUnauthorizedCallback) {
-      onUnauthorizedCallback('Invalid email or password');
+      onUnauthorizedCallback('Your session has expired or credentials are invalid. Please log in again.');
     }
-    const err = new Error('Invalid email or password') as any;
+    const err = new Error('Session expired. Please log in again.') as any;
     err.status = 401;
     throw err;
   }
@@ -1027,6 +1144,51 @@ export const apiInvoices = {
     const basePath = (settings.invoicesPath || '/api/invoices').replace(/\/$/, '');
     const res = await apiRequest<any>(`${basePath}/${invoiceId}/payment`, 'GET');
     return normalizePayment(res);
+  }
+};
+
+// Normalizer for Kitchen Order Item
+function normalizeKitchenItem(raw: any): KitchenOrderItem {
+  if (!raw) return { orderItemId: 0, menuItemName: 'Unknown', quantity: 1, itemStatus: 'PENDING' };
+  return {
+    orderItemId: Number(raw.orderItemId !== undefined ? raw.orderItemId : (raw.id || 0)),
+    menuItemName: String(raw.menuItemName || raw.name || 'Dish'),
+    quantity: Number(raw.quantity || 1),
+    itemStatus: (String(raw.itemStatus || 'PENDING').toUpperCase()) as KitchenItemStatus
+  };
+}
+
+// Normalizer for Kitchen Order
+function normalizeKitchenOrder(raw: any): KitchenOrder {
+  if (!raw) return { orderId: 0, orderNumber: '', tableNumber: '', createdAt: new Date().toISOString(), items: [] };
+  const items = Array.isArray(raw.items) ? raw.items.map(normalizeKitchenItem) : [];
+  return {
+    orderId: Number(raw.orderId !== undefined ? raw.orderId : (raw.id || 0)),
+    orderNumber: String(raw.orderNumber || (raw.id ? `ORD-${raw.id}` : '')),
+    orderType: raw.orderType || 'DINE_IN',
+    tableNumber: String(raw.tableNumber || (raw.restaurantTable && raw.restaurantTable.tableNumber) || 'Table'),
+    createdAt: String(raw.createdAt || new Date().toISOString()),
+    items
+  };
+}
+
+// Kitchen Orders API (Dedicated for CHEF and ADMIN roles)
+export const apiKitchen = {
+  // GET http://localhost:8080/api/kitchen/orders
+  getOrders: async (): Promise<KitchenOrder[]> => {
+    const settings = getApiSettings();
+    const path = settings.kitchenOrdersPath || '/api/kitchen/orders';
+    const list = await apiRequest<any[]>(path, 'GET');
+    return Array.isArray(list) ? list.map(normalizeKitchenOrder) : [];
+  },
+
+  // PATCH http://localhost:8080/api/kitchen/order-items/{orderItemId}/status?status={status}
+  updateItemStatus: async (orderItemId: number | string, status: KitchenItemStatus): Promise<KitchenOrderItem> => {
+    const settings = getApiSettings();
+    const basePath = (settings.kitchenItemsPath || '/api/kitchen/order-items').replace(/\/$/, '');
+    const path = `${basePath}/${orderItemId}/status?status=${encodeURIComponent(status)}`;
+    const res = await apiRequest<any>(path, 'PATCH');
+    return normalizeKitchenItem(res);
   }
 };
 
