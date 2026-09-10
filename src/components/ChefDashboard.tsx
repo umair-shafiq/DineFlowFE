@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   ChefHat, 
   Clock, 
@@ -98,14 +98,18 @@ export default function ChefDashboard({
     }
   };
 
+  const refreshRef = useRef(handleRefresh);
+  refreshRef.current = handleRefresh;
+
   // Polling interval for kitchen display (auto-refresh)
+  // Polls GET /api/kitchen/orders every 15s when enabled so newly created orders appear live
   useEffect(() => {
     if (!autoRefresh) return;
     const interval = setInterval(() => {
-      handleRefresh(true);
-    }, 12000); // 12 seconds poll
+      refreshRef.current(true);
+    }, 15000);
     return () => clearInterval(interval);
-  }, [autoRefresh, orders.length, soundEnabled]);
+  }, [autoRefresh]);
 
   // Update individual item status via PATCH /api/kitchen/order-items/{id}/status?status=...
   const handleUpdateItemStatus = async (
@@ -224,18 +228,64 @@ export default function ChefDashboard({
     };
   }, [orders]);
 
-  // Elapsed time helper
-  const getElapsedTimeInfo = (createdAt: string) => {
-    const diffMs = Date.now() - new Date(createdAt).getTime();
-    const diffMins = Math.max(0, Math.floor(diffMs / 60000));
+  // Elapsed time helper with human-friendly units (m, h, d) and placed time
+  const getElapsedTimeInfo = (createdAtRaw: any) => {
+    let createdDate: Date;
+    if (!createdAtRaw) {
+      createdDate = new Date();
+    } else if (createdAtRaw instanceof Date) {
+      createdDate = createdAtRaw;
+    } else if (typeof createdAtRaw === 'number') {
+      createdDate = new Date(createdAtRaw);
+    } else if (Array.isArray(createdAtRaw)) {
+      const [y, m, d, h = 0, min = 0, s = 0] = createdAtRaw;
+      createdDate = new Date(y, (m || 1) - 1, d || 1, h, min, s);
+    } else {
+      const parsed = new Date(createdAtRaw);
+      createdDate = isNaN(parsed.getTime()) ? new Date() : parsed;
+    }
+
+    const now = Date.now();
+    const diffMs = Math.max(0, now - createdDate.getTime());
+    const diffMins = Math.floor(diffMs / 60000);
     
-    if (diffMins < 10) {
-      return { mins: diffMins, label: `${diffMins}m ago`, level: 'normal', color: 'text-emerald-700 bg-emerald-50 border-emerald-200' };
+    // Human-friendly relative label (no more 3000m ago!)
+    let label = '';
+    if (diffMins === 0) {
+      label = 'Just now';
+    } else if (diffMins < 60) {
+      label = `${diffMins}m ago`;
+    } else if (diffMins < 1440) {
+      const hours = Math.floor(diffMins / 60);
+      const remainingMins = diffMins % 60;
+      label = remainingMins > 0 ? `${hours}h ${remainingMins}m ago` : `${hours}h ago`;
+    } else {
+      const days = Math.floor(diffMins / 1440);
+      const remHours = Math.floor((diffMins % 1440) / 60);
+      label = remHours > 0 ? `${days}d ${remHours}h ago` : `${days}d ago`;
     }
-    if (diffMins < 20) {
-      return { mins: diffMins, label: `${diffMins}m ago`, level: 'warning', color: 'text-amber-700 bg-amber-50 border-amber-200' };
+
+    // Exact placement time formatted cleanly
+    const isToday = createdDate.toDateString() === new Date().toDateString();
+    const timeStr = createdDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const exactTime = isToday ? `Today, ${timeStr}` : `${createdDate.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${timeStr}`;
+
+    // Urgency level for kitchen ticket cards
+    let level: 'normal' | 'warning' | 'urgent' = 'normal';
+    let color = 'text-emerald-700 bg-emerald-50 border-emerald-200';
+
+    if (diffMins >= 20 || diffMins >= 1440) {
+      level = 'urgent';
+      // Only pulse if placed today and over 20 mins; historical tickets don't pulse
+      color = diffMins < 1440 
+        ? 'text-rose-700 bg-rose-50 border-rose-200 animate-pulse' 
+        : 'text-rose-800 bg-rose-50/80 border-rose-200';
+    } else if (diffMins >= 10) {
+      level = 'warning';
+      color = 'text-amber-700 bg-amber-50 border-amber-200';
     }
-    return { mins: diffMins, label: `${diffMins}m ago`, level: 'urgent', color: 'text-rose-700 bg-rose-50 border-rose-200 animate-pulse' };
+
+    return { mins: diffMins, label, exactTime, level, color };
   };
 
   // Filter and sort tickets
@@ -321,10 +371,10 @@ export default function ChefDashboard({
                 ? 'bg-indigo-50 text-indigo-800 border-indigo-300 shadow-xs' 
                 : 'bg-surf-low text-text-secondary border-border-subtle hover:bg-surf-container'
             }`}
-            title="Toggle periodic background sync"
+            title={autoRefresh ? 'Background polling active: fetches new tickets every 15s. Click to pause.' : 'Polling paused. Click to enable background auto-sync.'}
           >
             <span className={`w-2 h-2 rounded-full ${autoRefresh ? 'bg-indigo-600 animate-ping' : 'bg-text-secondary/40'}`} />
-            <span>{autoRefresh ? 'Auto Sync ON' : 'Auto Sync OFF'}</span>
+            <span>{autoRefresh ? 'Auto Sync (15s): ON' : 'Auto Sync: OFF'}</span>
           </button>
 
           {/* Manual Refresh Button */}
@@ -556,9 +606,12 @@ export default function ChefDashboard({
 
                     {/* Time Elapsed Badge */}
                     <div className="text-right flex flex-col items-end">
-                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg font-mono text-[11px] font-bold border ${timeInfo.color}`}>
+                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg font-mono text-[11px] font-bold border ${timeInfo.color}`} title={timeInfo.exactTime}>
                         <Clock className="w-3 h-3" />
                         <span>{timeInfo.label}</span>
+                      </span>
+                      <span className="text-[10px] text-text-secondary mt-0.5 font-medium select-none">
+                        {timeInfo.exactTime}
                       </span>
                       {isAllReady && (
                         <span className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold font-mono text-emerald-700">

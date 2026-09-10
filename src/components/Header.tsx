@@ -72,18 +72,25 @@ export default function Header({
   return (
     <header 
       id="header"
-      className="sticky top-0 w-full h-16 bg-white border-b border-border-subtle flex justify-between items-center px-8 z-40 shadow-xs"
+      className="sticky top-0 w-full max-w-full h-16 bg-white border-b border-border-subtle flex justify-between items-center px-4 sm:px-6 lg:px-8 z-40 shadow-xs overflow-hidden"
     >
-      {/* Brand & Inline Tabs */}
-      <div className="flex items-center gap-8" id="header-left">
-        <span 
-          onClick={() => onTabChange(isAdmin ? 'reports' : (isChef ? 'kitchen' : 'orders'))}
-          className="font-display text-xl font-black text-brand-primary tracking-tight cursor-pointer hover:opacity-85 select-none flex items-center gap-2"
-        >
-          <span>DineFlow</span>
-        </span>
+      {/* Brand & Active Section / Breadcrumb */}
+      <div className="flex items-center gap-3 lg:gap-6 min-w-0 shrink" id="header-left">
+        <div className="flex items-center gap-2.5 shrink-0">
+          <span 
+            onClick={() => onTabChange(isAdmin ? 'reports' : (isChef ? 'kitchen' : 'orders'))}
+            className="font-display text-lg font-black text-brand-primary tracking-tight cursor-pointer hover:opacity-85 select-none shrink-0"
+          >
+            DineFlow
+          </span>
+          <span className="text-border-subtle/80 select-none">/</span>
+          <span className="text-xs font-bold text-brand-secondary bg-brand-secondary/10 px-2.5 py-0.5 rounded-lg capitalize shrink-0">
+            {currentTab.replace('-', ' ')}
+          </span>
+        </div>
         
-        <nav className="hidden md:flex gap-5 h-16" id="header-nav-links">
+        {/* Nav Links visible only on ultra-wide screens to prevent pushing header past viewport */}
+        <nav className="hidden 2xl:flex gap-5 h-16 shrink-0" id="header-nav-links">
           {navLinks.map((link) => {
             const isActive = activeLink === link.id;
             return (
@@ -91,7 +98,7 @@ export default function Header({
                 id={`header-nav-btn-${link.id}`}
                 key={link.id}
                 onClick={() => onTabChange(link.target)}
-                className={`font-sans text-sm transition-all h-16 px-1 flex items-center relative cursor-pointer hover:text-brand-secondary ${
+                className={`font-sans text-sm transition-all h-16 px-1 flex items-center relative cursor-pointer hover:text-brand-secondary shrink-0 ${
                   isActive 
                     ? 'text-brand-secondary font-bold' 
                     : 'text-text-secondary font-medium'
@@ -108,21 +115,21 @@ export default function Header({
       </div>
       
       {/* Search & Actions */}
-      <div className="flex items-center gap-4" id="header-right">
+      <div className="flex items-center gap-2 sm:gap-3 shrink-0" id="header-right">
         {/* Search Bar */}
-        <div className="relative w-56 lg:w-64" id="header-search">
+        <div className="relative w-36 sm:w-44 lg:w-56" id="header-search">
           <input 
             type="text" 
             placeholder={`Search ${currentTab.replace('-', ' ')}...`}
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 text-xs bg-surf-low border border-border-subtle rounded-xl focus:ring-2 focus:ring-brand-secondary/35 focus:border-brand-secondary transition-all outline-none text-text-primary placeholder:text-text-secondary/60"
+            className="w-full pl-8 pr-3 py-1.5 text-xs bg-surf-low border border-border-subtle rounded-xl focus:ring-2 focus:ring-brand-secondary/35 focus:border-brand-secondary transition-all outline-none text-text-primary placeholder:text-text-secondary/60"
           />
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary/70 w-3.5 h-3.5" />
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-secondary/70 w-3.5 h-3.5" />
           {searchQuery && (
             <button 
               onClick={() => onSearchChange('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-text-secondary hover:text-text-primary"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-text-secondary hover:text-text-primary"
             >
               Clear
             </button>

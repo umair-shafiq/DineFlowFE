@@ -393,7 +393,7 @@ export const INITIAL_KITCHEN_ORDERS: KitchenOrder[] = [
     orderNumber: "ORD-20260908-2B47",
     orderType: "DINE_IN",
     tableNumber: "T-01",
-    createdAt: "2026-09-08T19:16:23",
+    createdAt: new Date(Date.now() - 25 * 60000).toISOString(),
     items: [
       {
         orderItemId: 85,

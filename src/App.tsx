@@ -40,6 +40,7 @@ import {
   apiReservations,
   apiInvoices,
   apiKitchen,
+  extractRole,
   setAuthToken,
   setOnUnauthorizedCallback
 } from './api';
@@ -57,6 +58,10 @@ export default function App() {
         }
         if (parsed.token) {
           setAuthToken(parsed.token);
+          // Ensure role is correctly resolved from token or userRole
+          parsed.userRole = extractRole(parsed.userRole, parsed.token);
+        } else {
+          parsed.userRole = extractRole(parsed.userRole);
         }
         return parsed;
       }
@@ -590,7 +595,7 @@ export default function App() {
   }
 
   return (
-    <div className="flex min-h-screen bg-surf-bg text-text-primary font-sans" id="chef-app-root">
+    <div className="flex min-h-screen bg-surf-bg text-text-primary font-sans w-full max-w-full overflow-x-hidden" id="chef-app-root">
       
       {/* Persistent Left Sidebar Navigation */}
       <Sidebar 
@@ -601,7 +606,7 @@ export default function App() {
       />
 
       {/* Main Container - Offsets left by sidebar width (w-64 = 16rem) */}
-      <div className="flex-1 ml-64 min-w-0 flex flex-col min-h-screen" id="chef-main-viewport">
+      <div className="flex-1 ml-64 min-w-0 flex flex-col min-h-screen max-w-[calc(100vw-16rem)] overflow-x-hidden" id="chef-main-viewport">
         
         {/* Persistent Top Navbar with Search & Shortcuts */}
         <Header

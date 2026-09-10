@@ -720,11 +720,43 @@ export const apiOrders = {
   }
 };
 
+// Helper to extract clean UserRole (ADMIN, CHEF, WAITER) from API responses or JWT tokens
+export function extractRole(rawRole: any, token?: string): UserRole {
+  if (rawRole) {
+    const str = String(rawRole).toUpperCase().replace(/^ROLE_/, '').trim();
+    if (str === 'CHEF' || str.includes('CHEF')) return 'CHEF';
+    if (str === 'ADMIN' || str.includes('ADMIN')) return 'ADMIN';
+    if (str === 'WAITER' || str.includes('WAITER')) return 'WAITER';
+  }
+
+  if (token) {
+    try {
+      const parts = token.split('.');
+      if (parts.length === 3) {
+        const payload = JSON.parse(atob(parts[1]));
+        const tokenRole = payload.userRole || payload.role || payload.roles || payload.authorities || payload.scope;
+        if (Array.isArray(tokenRole)) {
+          const joined = tokenRole.map((r: any) => typeof r === 'string' ? r : (r.authority || '')).join(',').toUpperCase();
+          if (joined.includes('CHEF')) return 'CHEF';
+          if (joined.includes('ADMIN')) return 'ADMIN';
+          if (joined.includes('WAITER')) return 'WAITER';
+        } else if (typeof tokenRole === 'string') {
+          const str = tokenRole.toUpperCase().replace(/^ROLE_/, '').trim();
+          if (str === 'CHEF' || str.includes('CHEF')) return 'CHEF';
+          if (str === 'ADMIN' || str.includes('ADMIN')) return 'ADMIN';
+          if (str === 'WAITER' || str.includes('WAITER')) return 'WAITER';
+        }
+      }
+    } catch {}
+  }
+
+  return 'WAITER';
+}
+
 // Normalizer for User
 function normalizeUser(raw: any): User {
   if (!raw) return raw;
-  const roleStr = String(raw.userRole || raw.role || 'WAITER').toUpperCase();
-  const validRole: UserRole = roleStr === 'ADMIN' ? 'ADMIN' : 'WAITER';
+  const validRole: UserRole = extractRole(raw.userRole || raw.role);
   const rawStatus = raw.userStatus !== undefined ? raw.userStatus : (raw.enabled !== undefined ? raw.enabled : (raw.status !== undefined ? raw.status : true));
   
   return {
@@ -785,8 +817,7 @@ export const apiAuth = {
     const resJson = await response.json();
     const token = resJson.token || resJson.jwt || resJson.accessToken || '';
     const email = resJson.email || credentials.email;
-    const roleStr = String(resJson.userRole || resJson.role || 'ADMIN').toUpperCase();
-    const userRole: UserRole = roleStr === 'WAITER' ? 'WAITER' : 'ADMIN';
+    const userRole: UserRole = extractRole(resJson.userRole || resJson.role, token);
 
     // Store in-memory token
     if (token) {
@@ -1158,6 +1189,26 @@ function normalizeKitchenItem(raw: any): KitchenOrderItem {
   };
 }
 
+// Helper to parse date formats from Spring Boot (arrays, timestamps, strings)
+function parseApiDateString(rawDate: any): string {
+  if (!rawDate) return new Date().toISOString();
+  if (Array.isArray(rawDate)) {
+    const [year, month, day, hour = 0, minute = 0, second = 0] = rawDate;
+    const d = new Date(year, (month || 1) - 1, day || 1, hour, minute, second);
+    return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+  }
+  if (typeof rawDate === 'number') {
+    return new Date(rawDate).toISOString();
+  }
+  if (typeof rawDate === 'string') {
+    if (/^\d+$/.test(rawDate)) {
+      return new Date(parseInt(rawDate, 10)).toISOString();
+    }
+    return rawDate;
+  }
+  return new Date().toISOString();
+}
+
 // Normalizer for Kitchen Order
 function normalizeKitchenOrder(raw: any): KitchenOrder {
   if (!raw) return { orderId: 0, orderNumber: '', tableNumber: '', createdAt: new Date().toISOString(), items: [] };
@@ -1167,7 +1218,7 @@ function normalizeKitchenOrder(raw: any): KitchenOrder {
     orderNumber: String(raw.orderNumber || (raw.id ? `ORD-${raw.id}` : '')),
     orderType: raw.orderType || 'DINE_IN',
     tableNumber: String(raw.tableNumber || (raw.restaurantTable && raw.restaurantTable.tableNumber) || 'Table'),
-    createdAt: String(raw.createdAt || new Date().toISOString()),
+    createdAt: parseApiDateString(raw.createdAt),
     items
   };
 }
