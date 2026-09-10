@@ -562,12 +562,21 @@ export default function App() {
     handleItemsChange(updatedItems);
   };
 
+  // Track if orders view should open on the create terminal
+  const [ordersInitialMode, setOrdersInitialMode] = useState<'board' | 'create'>('board');
+
   // Shortcut from header to trigger opening the new menu item modal
   const handleAddShortcutClick = () => {
     handleTabChange('menu-items');
     setTimeout(() => {
       setIsAddModalOpen(true);
     }, 50);
+  };
+
+  // Shortcut from header to trigger creating a new order
+  const handleAddOrderShortcutClick = () => {
+    setOrdersInitialMode('create');
+    handleTabChange('orders');
   };
 
   // Count active pending/preparing orders for red badge in Top bar
@@ -608,13 +617,12 @@ export default function App() {
       {/* Main Container - Offsets left by sidebar width (w-64 = 16rem) */}
       <div className="flex-1 ml-64 min-w-0 flex flex-col min-h-screen max-w-[calc(100vw-16rem)] overflow-x-hidden" id="chef-main-viewport">
         
-        {/* Persistent Top Navbar with Search & Shortcuts */}
+        {/* Persistent Top Navbar with Clean Breadcrumb & Quick Actions */}
         <Header
           currentTab={safeTab}
           onTabChange={handleTabChange}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
           onAddShortcutClick={handleAddShortcutClick}
+          onAddOrderShortcutClick={handleAddOrderShortcutClick}
           pendingOrdersCount={pendingOrdersCount}
           apiEnabled={apiSettings.enabled}
           apiConnected={apiConnected}
@@ -677,6 +685,7 @@ export default function App() {
                 handleTabChange('invoices');
               }}
               userRole={currentUser.userRole}
+              initialDisplayMode={ordersInitialMode}
             />
           )}
 

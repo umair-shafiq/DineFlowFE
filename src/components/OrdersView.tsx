@@ -16,6 +16,7 @@ interface OrdersViewProps {
   onInvoicesChange?: (updatedInvoices: Invoice[]) => void;
   onNavigateToInvoice?: (invoiceId: number | string, invoiceObj?: Invoice) => void;
   userRole?: UserRole;
+  initialDisplayMode?: 'board' | 'create';
 }
 
 export default function OrdersView({
@@ -28,7 +29,8 @@ export default function OrdersView({
   onTablesChange,
   onInvoicesChange,
   onNavigateToInvoice,
-  userRole = 'ADMIN'
+  userRole = 'ADMIN',
+  initialDisplayMode = 'board'
 }: OrdersViewProps) {
   const { formatPrice, symbol } = useCurrency();
   const isWaiter = userRole === 'WAITER';
@@ -82,7 +84,14 @@ export default function OrdersView({
   const [selectedModifiersForActiveItem, setSelectedModifiersForActiveItem] = useState<Modifier[]>([]);
   
   // Kanban/Terminal Display Tab (locked to 'board' for WAITER)
-  const [displayMode, setDisplayMode] = useState<'board' | 'create'>('board');
+  const [displayMode, setDisplayMode] = useState<'board' | 'create'>(isWaiter ? 'board' : initialDisplayMode);
+
+  // React to parent requesting display mode change (e.g. from + New Order button)
+  useEffect(() => {
+    if (!isWaiter && initialDisplayMode) {
+      setDisplayMode(initialDisplayMode);
+    }
+  }, [initialDisplayMode, isWaiter]);
   const [activeBoardFilter, setActiveBoardFilter] = useState<'all' | 'pending' | 'preparing' | 'completed' | 'cancelled'>('all');
 
   // Order Lookup & Active Filter States

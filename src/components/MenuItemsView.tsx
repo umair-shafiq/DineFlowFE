@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { MenuItem, Category, Modifier } from '../types';
-import { Plus, Edit2, Trash2, X, AlertTriangle, Image as ImageIcon } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, AlertTriangle, Image as ImageIcon, Search } from 'lucide-react';
 import { useCurrency } from '../context/CurrencyContext';
 
 interface MenuItemsViewProps {
   items: MenuItem[];
   categories: Category[];
   modifiers: Modifier[];
-  searchQuery: string;
+  searchQuery?: string;
   onItemsChange: (updatedItems: MenuItem[]) => void;
   isAddModalOpen: boolean;
   setIsAddModalOpen: (isOpen: boolean) => void;
@@ -29,13 +29,14 @@ export default function MenuItemsView({
   items,
   categories,
   modifiers,
-  searchQuery,
+  searchQuery = '',
   onItemsChange,
   isAddModalOpen,
   setIsAddModalOpen
 }: MenuItemsViewProps) {
   const { formatPrice, symbol } = useCurrency();
   const [activeCategory, setActiveCategory] = useState<string>('All');
+  const [localSearch, setLocalSearch] = useState<string>(searchQuery);
   
   // State for Editing
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
@@ -190,12 +191,14 @@ export default function MenuItemsView({
   };
 
   // Filter items by category and search query
+  const effectiveQuery = (localSearch || searchQuery || '').trim().toLowerCase();
   const filteredItems = items.filter(item => {
     const itemCatName = typeof item.category === 'object' ? ((item.category as any).name || '') : (item.category || '');
     const matchesCategory = activeCategory === 'All' || itemCatName === activeCategory;
-    const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          itemCatName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchesSearch = !effectiveQuery || 
+                          item.name.toLowerCase().includes(effectiveQuery) || 
+                          itemCatName.toLowerCase().includes(effectiveQuery) ||
+                          (item.description && item.description.toLowerCase().includes(effectiveQuery));
     return matchesCategory && matchesSearch;
   });
 
@@ -224,28 +227,50 @@ export default function MenuItemsView({
         </button>
       </div>
 
-      {/* Category Tabs Bar */}
+      {/* Category Tabs & Local Search Bar */}
       <div 
-        className="flex gap-6 border-b border-border-subtle mb-6 overflow-x-auto no-scrollbar scroll-smooth"
+        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border-subtle mb-6"
         id="category-tabs-bar"
       >
-        {categoryTabs.map((tab) => {
-          const isActive = activeCategory === tab;
-          return (
-            <button
-              id={`tab-${tab.toLowerCase().replace(/\s+/g, '-')}`}
-              key={tab}
-              onClick={() => setActiveCategory(tab)}
-              className={`pb-3 px-1 font-sans text-[15px] font-semibold whitespace-nowrap transition-all border-b-[3px] ${
-                isActive 
-                  ? 'text-brand-secondary border-brand-secondary font-bold' 
-                  : 'text-text-secondary border-transparent hover:text-brand-primary'
-              }`}
+        <div className="flex gap-6 overflow-x-auto no-scrollbar scroll-smooth">
+          {categoryTabs.map((tab) => {
+            const isActive = activeCategory === tab;
+            return (
+              <button
+                id={`tab-${tab.toLowerCase().replace(/\s+/g, '-')}`}
+                key={tab}
+                onClick={() => setActiveCategory(tab)}
+                className={`pb-3 px-1 font-sans text-[15px] font-semibold whitespace-nowrap transition-all border-b-[3px] ${
+                  isActive 
+                    ? 'text-brand-secondary border-brand-secondary font-bold' 
+                    : 'text-text-secondary border-transparent hover:text-brand-primary'
+                }`}
+              >
+                {tab}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* In-view Search Bar */}
+        <div className="relative w-full sm:w-64 pb-2.5 sm:pb-0">
+          <Search className="w-3.5 h-3.5 text-text-secondary absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder="Search menu items..."
+            value={localSearch}
+            onChange={(e) => setLocalSearch(e.target.value)}
+            className="w-full bg-surf-low border border-border-subtle rounded-xl pl-8 pr-3 py-1.5 text-xs focus:ring-2 focus:ring-brand-secondary/30 outline-none text-text-primary placeholder:text-text-secondary/60"
+          />
+          {localSearch && (
+            <button 
+              onClick={() => setLocalSearch('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-text-secondary hover:text-text-primary"
             >
-              {tab}
+              Clear
             </button>
-          );
-        })}
+          )}
+        </div>
       </div>
 
       {/* Empty State */}

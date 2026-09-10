@@ -1,27 +1,27 @@
 import React from 'react';
-import { Search, Bell, Settings, Plus, LogOut, Shield, UserCheck } from 'lucide-react';
+import { Bell, Settings, Plus, LogOut, ShoppingBag } from 'lucide-react';
 import { AuthUser } from '../types';
 import CurrencySelector from './CurrencySelector';
 
 interface HeaderProps {
   currentTab: string;
   onTabChange: (tab: string) => void;
-  searchQuery: string;
-  onSearchChange: (query: string) => void;
   onAddShortcutClick: () => void;
+  onAddOrderShortcutClick?: () => void;
   pendingOrdersCount: number;
   apiEnabled?: boolean;
   apiConnected?: boolean | null;
   currentUser?: AuthUser | null;
   onLogout?: () => void;
+  searchQuery?: string;
+  onSearchChange?: (query: string) => void;
 }
 
 export default function Header({
   currentTab,
   onTabChange,
-  searchQuery,
-  onSearchChange,
   onAddShortcutClick,
+  onAddOrderShortcutClick,
   pendingOrdersCount,
   apiEnabled = false,
   apiConnected = null,
@@ -30,119 +30,54 @@ export default function Header({
 }: HeaderProps) {
   const isAdmin = currentUser?.userRole === 'ADMIN';
   const isChef = currentUser?.userRole === 'CHEF';
-  
-  // Mapping of main top bar links to internal navigation states (for Admin, Chef, Waiter)
-  const adminNavLinks = [
-    { id: 'dashboard', label: 'Dashboard', target: 'reports' },
-    { id: 'kitchen', label: 'Kitchen', target: 'kitchen' },
-    { id: 'orders', label: 'Orders', target: 'orders' },
-    { id: 'invoices', label: 'Invoices', target: 'invoices' },
-    { id: 'reservations', label: 'Reservations', target: 'reservations' },
-    { id: 'tables', label: 'Tables', target: 'tables' },
-    { id: 'inventory', label: 'Inventory', target: 'menu-items' },
-    { id: 'users', label: 'Staff', target: 'users' },
-  ];
 
-  const chefNavLinks = [
-    { id: 'kitchen', label: 'Kitchen Queue', target: 'kitchen' },
-  ];
-
-  const waiterNavLinks = [
-    { id: 'orders', label: 'Live Orders', target: 'orders' },
-  ];
-
-  const navLinks = isAdmin ? adminNavLinks : (isChef ? chefNavLinks : waiterNavLinks);
-
-  // Detect which top-link is "active" based on currentTab
-  const getActiveNavLink = () => {
-    if (currentTab === 'kitchen') return 'kitchen';
-    if (currentTab === 'menu-items' || currentTab === 'categories' || currentTab === 'modifiers') return 'inventory';
-    if (currentTab === 'reports') return 'dashboard';
-    if (currentTab === 'orders') return 'orders';
-    if (currentTab === 'invoices') return 'invoices';
-    if (currentTab === 'reservations') return 'reservations';
-    if (currentTab === 'tables') return 'tables';
-    if (currentTab === 'users') return 'users';
-    if (currentTab === 'support') return 'settings';
-    return isChef ? 'kitchen' : (isAdmin ? 'dashboard' : 'orders');
+  // Human-friendly title for the active selected section
+  const getSectionLabel = (tab: string) => {
+    switch (tab) {
+      case 'reports': return 'Dashboard';
+      case 'kitchen': return 'Kitchen';
+      case 'orders': return 'Orders';
+      case 'invoices': return 'Invoices';
+      case 'reservations': return 'Reservations';
+      case 'tables': return 'Tables';
+      case 'menu-items': return 'Menu Items';
+      case 'categories': return 'Categories';
+      case 'modifiers': return 'Modifiers';
+      case 'users': return 'Staff';
+      case 'support': return 'Settings';
+      default: return tab.replace('-', ' ');
+    }
   };
-
-  const activeLink = getActiveNavLink();
 
   return (
     <header 
       id="header"
-      className="sticky top-0 w-full max-w-full h-16 bg-white border-b border-border-subtle flex justify-between items-center px-4 sm:px-6 lg:px-8 z-40 shadow-xs overflow-hidden"
+      className="sticky top-0 w-full max-w-full h-16 bg-white border-b border-border-subtle flex justify-between items-center px-4 sm:px-6 lg:px-8 z-40 shadow-xs select-none"
     >
-      {/* Brand & Active Section / Breadcrumb */}
-      <div className="flex items-center gap-3 lg:gap-6 min-w-0 shrink" id="header-left">
-        <div className="flex items-center gap-2.5 shrink-0">
-          <span 
-            onClick={() => onTabChange(isAdmin ? 'reports' : (isChef ? 'kitchen' : 'orders'))}
-            className="font-display text-lg font-black text-brand-primary tracking-tight cursor-pointer hover:opacity-85 select-none shrink-0"
-          >
-            DineFlow
-          </span>
-          <span className="text-border-subtle/80 select-none">/</span>
-          <span className="text-xs font-bold text-brand-secondary bg-brand-secondary/10 px-2.5 py-0.5 rounded-lg capitalize shrink-0">
-            {currentTab.replace('-', ' ')}
-          </span>
-        </div>
-        
-        {/* Nav Links visible only on ultra-wide screens to prevent pushing header past viewport */}
-        <nav className="hidden 2xl:flex gap-5 h-16 shrink-0" id="header-nav-links">
-          {navLinks.map((link) => {
-            const isActive = activeLink === link.id;
-            return (
-              <button
-                id={`header-nav-btn-${link.id}`}
-                key={link.id}
-                onClick={() => onTabChange(link.target)}
-                className={`font-sans text-sm transition-all h-16 px-1 flex items-center relative cursor-pointer hover:text-brand-secondary shrink-0 ${
-                  isActive 
-                    ? 'text-brand-secondary font-bold' 
-                    : 'text-text-secondary font-medium'
-                }`}
-              >
-                {link.label}
-                {isActive && (
-                  <span className="absolute bottom-0 left-0 right-0 h-[3px] bg-brand-secondary rounded-t-full" />
-                )}
-              </button>
-            );
-          })}
-        </nav>
+      {/* Brand & Selected Option Only */}
+      <div className="flex items-center gap-3 shrink-0" id="header-left">
+        <span 
+          onClick={() => onTabChange(isAdmin ? 'reports' : (isChef ? 'kitchen' : 'orders'))}
+          className="font-display text-lg font-black text-brand-primary tracking-tight cursor-pointer hover:opacity-85 select-none shrink-0"
+        >
+          DineFlow
+        </span>
+        <span className="text-border-subtle/80 select-none">/</span>
+        <span className="text-xs font-bold text-brand-secondary bg-brand-secondary/10 px-2.5 py-1 rounded-lg capitalize shrink-0 tracking-wide">
+          {getSectionLabel(currentTab)}
+        </span>
       </div>
       
-      {/* Search & Actions */}
+      {/* Actions & Utilities - Clean, spacious right-side bar */}
       <div className="flex items-center gap-2 sm:gap-3 shrink-0" id="header-right">
-        {/* Search Bar */}
-        <div className="relative w-36 sm:w-44 lg:w-56" id="header-search">
-          <input 
-            type="text" 
-            placeholder={`Search ${currentTab.replace('-', ' ')}...`}
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full pl-8 pr-3 py-1.5 text-xs bg-surf-low border border-border-subtle rounded-xl focus:ring-2 focus:ring-brand-secondary/35 focus:border-brand-secondary transition-all outline-none text-text-primary placeholder:text-text-secondary/60"
-          />
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-secondary/70 w-3.5 h-3.5" />
-          {searchQuery && (
-            <button 
-              onClick={() => onSearchChange('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-text-secondary hover:text-text-primary"
-            >
-              Clear
-            </button>
-          )}
-        </div>
-
         {/* Currency Switcher */}
         <CurrencySelector />
 
         {/* Notifications and Settings */}
-        <div className="flex items-center gap-1.5" id="header-utility-buttons">
+        <div className="flex items-center gap-1" id="header-utility-buttons">
           {/* Notifications */}
           <button 
+            id="header-notifications-btn"
             onClick={() => onTabChange('orders')}
             className="p-2 hover:bg-surf-container rounded-xl text-text-secondary transition-colors relative active-scale cursor-pointer"
             title="Pending Orders"
@@ -158,6 +93,7 @@ export default function Header({
           {/* Settings Shortcut (Admin only) */}
           {isAdmin && (
             <button 
+              id="header-settings-btn"
               onClick={() => onTabChange('support')}
               className="p-2 hover:bg-surf-container rounded-xl text-text-secondary transition-colors active-scale cursor-pointer"
               title="API & System Settings"
@@ -170,6 +106,7 @@ export default function Header({
         {/* Spring Boot Connection Status Indicator */}
         {apiEnabled && (
           <button
+            id="header-db-status-btn"
             onClick={() => onTabChange(isAdmin ? 'support' : 'orders')}
             className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-[11px] font-semibold tracking-tight transition-all active-scale ${
               apiConnected === true
@@ -191,15 +128,33 @@ export default function Header({
           </button>
         )}
 
-        {/* Quick Add Button (Admin only) */}
+        {/* Quick Action Buttons (Admin only) */}
         {isAdmin && (
-          <button 
-            onClick={onAddShortcutClick}
-            className="bg-brand-primary text-white text-xs font-semibold h-8.5 px-3.5 rounded-xl flex items-center gap-1.5 hover:bg-brand-primary/90 transition-colors active-scale shrink-0 cursor-pointer shadow-xs"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Add Item</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Quick Add New Order Button */}
+            {onAddOrderShortcutClick && (
+              <button 
+                id="header-new-order-btn"
+                onClick={onAddOrderShortcutClick}
+                className="bg-brand-secondary hover:bg-brand-secondary/90 text-white text-xs font-semibold h-8.5 px-3.5 rounded-xl flex items-center gap-1.5 transition-colors active-scale shrink-0 cursor-pointer shadow-xs"
+                title="Create New Dining Order"
+              >
+                <ShoppingBag className="w-3.5 h-3.5" />
+                <span>New Order</span>
+              </button>
+            )}
+
+            {/* Quick Add Menu Item Button */}
+            <button 
+              id="header-add-item-btn"
+              onClick={onAddShortcutClick}
+              className="bg-brand-primary hover:bg-brand-primary/90 text-white text-xs font-semibold h-8.5 px-3.5 rounded-xl flex items-center gap-1.5 transition-colors active-scale shrink-0 cursor-pointer shadow-xs"
+              title="Add New Menu Item"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Item</span>
+            </button>
+          </div>
         )}
 
         {/* User Role Badge & Signout */}
