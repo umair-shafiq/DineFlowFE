@@ -200,3 +200,25 @@ export interface KitchenOrder {
   items: KitchenOrderItem[];
 }
 
+// Reports API Interfaces
+export interface ReportSalesSummary {
+  totalOrders: number;
+  totalRevenue: number;
+  totalTax: number;
+}
+
+export interface ReportMostOrderedItem {
+  menuItemName: string;
+  totalQuantitySold: number;
+}
+
+export interface ReportRevenueByCategory {
+  categoryName: string;
+  totalRevenue: number;
+}
+
+export interface ReportPeakHour {
+  hourOfDay: number; // 0 to 23
+  orderCount: number;
+}
+

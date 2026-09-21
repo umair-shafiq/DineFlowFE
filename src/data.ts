@@ -1,4 +1,18 @@
-import { MenuItem, Category, Modifier, Order, User, RestaurantTable, Reservation, Invoice, KitchenOrder } from './types';
+import { 
+  MenuItem, 
+  Category, 
+  Modifier, 
+  Order, 
+  User, 
+  RestaurantTable, 
+  Reservation, 
+  Invoice, 
+  KitchenOrder,
+  ReportSalesSummary,
+  ReportMostOrderedItem,
+  ReportRevenueByCategory,
+  ReportPeakHour
+} from './types';
 
 export const INITIAL_CATEGORIES: Category[] = [
   { id: 'cat-1', name: 'Appetizers' },
@@ -460,3 +474,34 @@ export function saveData<T>(key: string, data: T): void {
     console.error('Error writing localStorage key ' + key, e);
   }
 }
+
+// Initial fallback mock data for Admin Reports
+export const INITIAL_REPORT_SALES: ReportSalesSummary = {
+  totalOrders: 9,
+  totalRevenue: 2971.4275,
+  totalTax: 387.5775
+};
+
+export const INITIAL_REPORT_MOST_ORDERED: ReportMostOrderedItem[] = [
+  { menuItemName: 'Sting', totalQuantitySold: 25 },
+  { menuItemName: 'Coke', totalQuantitySold: 20 },
+  { menuItemName: 'Sprite', totalQuantitySold: 12 }
+];
+
+export const INITIAL_REPORT_REVENUE_BY_CATEGORY: ReportRevenueByCategory[] = [
+  { categoryName: 'Cold Drinks', totalRevenue: 8086.55 },
+  { categoryName: 'Fast Food', totalRevenue: 869.4 }
+];
+
+export const INITIAL_REPORT_PEAK_HOURS: ReportPeakHour[] = [
+  { hourOfDay: 0, orderCount: 6 },
+  { hourOfDay: 1, orderCount: 1 },
+  { hourOfDay: 7, orderCount: 1 },
+  { hourOfDay: 10, orderCount: 1 },
+  { hourOfDay: 13, orderCount: 2 },
+  { hourOfDay: 14, orderCount: 6 },
+  { hourOfDay: 15, orderCount: 5 },
+  { hourOfDay: 16, orderCount: 1 },
+  { hourOfDay: 20, orderCount: 1 }
+];
+

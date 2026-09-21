@@ -18,7 +18,11 @@ import {
   PaymentMethod,
   KitchenOrder,
   KitchenOrderItem,
-  KitchenItemStatus
+  KitchenItemStatus,
+  ReportSalesSummary,
+  ReportMostOrderedItem,
+  ReportRevenueByCategory,
+  ReportPeakHour
 } from './types';
 
 export interface SpringBootSettings {
@@ -34,6 +38,10 @@ export interface SpringBootSettings {
   invoicesPath?: string;
   kitchenOrdersPath?: string;
   kitchenItemsPath?: string;
+  reportsSalesPath?: string;
+  reportsMostOrderedPath?: string;
+  reportsRevenueByCategoryPath?: string;
+  reportsPeakHoursPath?: string;
 }
 
 const SETTINGS_KEY = 'spring_boot_connector_settings';
@@ -50,7 +58,11 @@ const DEFAULT_SETTINGS: SpringBootSettings = {
   reservationsPath: '/api/reservations',
   invoicesPath: '/api/invoices',
   kitchenOrdersPath: '/api/kitchen/orders',
-  kitchenItemsPath: '/api/kitchen/order-items'
+  kitchenItemsPath: '/api/kitchen/order-items',
+  reportsSalesPath: '/api/reports/sales',
+  reportsMostOrderedPath: '/api/reports/most-ordered-items',
+  reportsRevenueByCategoryPath: '/api/reports/revenue-by-category',
+  reportsPeakHoursPath: '/api/reports/peak-hours'
 };
 
 // JWT token storage with localStorage persistence across page reloads
@@ -193,6 +205,18 @@ export function getApiSettings(): SpringBootSettings {
       }
       if (!parsed.kitchenItemsPath) {
         parsed.kitchenItemsPath = '/api/kitchen/order-items';
+      }
+      if (!parsed.reportsSalesPath) {
+        parsed.reportsSalesPath = '/api/reports/sales';
+      }
+      if (!parsed.reportsMostOrderedPath) {
+        parsed.reportsMostOrderedPath = '/api/reports/most-ordered-items';
+      }
+      if (!parsed.reportsRevenueByCategoryPath) {
+        parsed.reportsRevenueByCategoryPath = '/api/reports/revenue-by-category';
+      }
+      if (!parsed.reportsPeakHoursPath) {
+        parsed.reportsPeakHoursPath = '/api/reports/peak-hours';
       }
       if (parsed.enabled === undefined) {
         parsed.enabled = true;
@@ -1240,6 +1264,61 @@ export const apiKitchen = {
     const path = `${basePath}/${orderItemId}/status?status=${encodeURIComponent(status)}`;
     const res = await apiRequest<any>(path, 'PATCH');
     return normalizeKitchenItem(res);
+  }
+};
+
+// Admin Reports API (4 dedicated reporting endpoints)
+export const apiReports = {
+  // GET http://localhost:8080/api/reports/sales?startDate=2026-09-01T00:00:00&endDate=2026-09-30T23:59:59
+  // Also supports ?from=...&to=...
+  getSales: async (startDate: string, endDate: string): Promise<ReportSalesSummary> => {
+    const settings = getApiSettings();
+    const basePath = settings.reportsSalesPath || '/api/reports/sales';
+    const query = `startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}&from=${encodeURIComponent(startDate)}&to=${encodeURIComponent(endDate)}`;
+    const separator = basePath.includes('?') ? '&' : '?';
+    const res = await apiRequest<any>(`${basePath}${separator}${query}`, 'GET');
+    return {
+      totalOrders: Number(res?.totalOrders !== undefined ? res.totalOrders : (res?.ordersCount || 0)),
+      totalRevenue: Number(res?.totalRevenue !== undefined ? res.totalRevenue : (res?.revenue || 0)),
+      totalTax: Number(res?.totalTax !== undefined ? res.totalTax : (res?.tax || 0))
+    };
+  },
+
+  // GET http://localhost:8080/api/reports/most-ordered-items?limit=10
+  getMostOrderedItems: async (limit: number = 5): Promise<ReportMostOrderedItem[]> => {
+    const settings = getApiSettings();
+    const basePath = settings.reportsMostOrderedPath || '/api/reports/most-ordered-items';
+    const separator = basePath.includes('?') ? '&' : '?';
+    const res = await apiRequest<any[]>(`${basePath}${separator}limit=${limit}`, 'GET');
+    if (!Array.isArray(res)) return [];
+    return res.map(item => ({
+      menuItemName: String(item.menuItemName || item.itemName || item.name || 'Menu Item'),
+      totalQuantitySold: Number(item.totalQuantitySold !== undefined ? item.totalQuantitySold : (item.quantitySold || item.quantity || item.soldCount || 0))
+    }));
+  },
+
+  // GET http://localhost:8080/api/reports/revenue-by-category
+  getRevenueByCategory: async (): Promise<ReportRevenueByCategory[]> => {
+    const settings = getApiSettings();
+    const basePath = settings.reportsRevenueByCategoryPath || '/api/reports/revenue-by-category';
+    const res = await apiRequest<any[]>(basePath, 'GET');
+    if (!Array.isArray(res)) return [];
+    return res.map(item => ({
+      categoryName: String(item.categoryName || item.name || 'Category'),
+      totalRevenue: Number(item.totalRevenue !== undefined ? item.totalRevenue : (item.revenue || item.total || 0))
+    }));
+  },
+
+  // GET http://localhost:8080/api/reports/peak-hours
+  getPeakHours: async (): Promise<ReportPeakHour[]> => {
+    const settings = getApiSettings();
+    const basePath = settings.reportsPeakHoursPath || '/api/reports/peak-hours';
+    const res = await apiRequest<any[]>(basePath, 'GET');
+    if (!Array.isArray(res)) return [];
+    return res.map(item => ({
+      hourOfDay: Number(item.hourOfDay !== undefined ? item.hourOfDay : (item.hour !== undefined ? item.hour : 0)),
+      orderCount: Number(item.orderCount !== undefined ? item.orderCount : (item.count !== undefined ? item.count : (item.orders || 0)))
+    }));
   }
 };
 

@@ -703,7 +703,9 @@ export default function App() {
             <ReportsView 
               orders={orders} 
               items={items} 
-              categories={categories} 
+              categories={categories}
+              apiEnabled={apiSettings.enabled}
+              apiConnected={apiConnected}
             />
           )}
 

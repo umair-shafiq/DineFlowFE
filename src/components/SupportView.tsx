@@ -45,6 +45,10 @@ export default function SupportView({
   const [tablesPathInput, setTablesPathInput] = useState(apiSettings.tablesPath || '/api/tables');
   const [reservationsPathInput, setReservationsPathInput] = useState(apiSettings.reservationsPath || '/api/reservations');
   const [invoicesPathInput, setInvoicesPathInput] = useState(apiSettings.invoicesPath || '/api/invoices');
+  const [reportsSalesPathInput, setReportsSalesPathInput] = useState(apiSettings.reportsSalesPath || '/api/reports/sales');
+  const [reportsMostOrderedPathInput, setReportsMostOrderedPathInput] = useState(apiSettings.reportsMostOrderedPath || '/api/reports/most-ordered-items');
+  const [reportsRevenueByCategoryPathInput, setReportsRevenueByCategoryPathInput] = useState(apiSettings.reportsRevenueByCategoryPath || '/api/reports/revenue-by-category');
+  const [reportsPeakHoursPathInput, setReportsPeakHoursPathInput] = useState(apiSettings.reportsPeakHoursPath || '/api/reports/peak-hours');
 
   // Testing & seeding states
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -61,6 +65,10 @@ export default function SupportView({
     setTablesPathInput(apiSettings.tablesPath || '/api/tables');
     setReservationsPathInput(apiSettings.reservationsPath || '/api/reservations');
     setInvoicesPathInput(apiSettings.invoicesPath || '/api/invoices');
+    setReportsSalesPathInput(apiSettings.reportsSalesPath || '/api/reports/sales');
+    setReportsMostOrderedPathInput(apiSettings.reportsMostOrderedPath || '/api/reports/most-ordered-items');
+    setReportsRevenueByCategoryPathInput(apiSettings.reportsRevenueByCategoryPath || '/api/reports/revenue-by-category');
+    setReportsPeakHoursPathInput(apiSettings.reportsPeakHoursPath || '/api/reports/peak-hours');
   }, [apiSettings]);
 
   // Load scratchpad notes on load
@@ -94,7 +102,11 @@ export default function SupportView({
       ordersPath: ordersPathInput.trim() || '/api/orders',
       tablesPath: tablesPathInput.trim() || '/api/tables',
       reservationsPath: reservationsPathInput.trim() || '/api/reservations',
-      invoicesPath: invoicesPathInput.trim() || '/api/invoices'
+      invoicesPath: invoicesPathInput.trim() || '/api/invoices',
+      reportsSalesPath: reportsSalesPathInput.trim() || '/api/reports/sales',
+      reportsMostOrderedPath: reportsMostOrderedPathInput.trim() || '/api/reports/most-ordered-items',
+      reportsRevenueByCategoryPath: reportsRevenueByCategoryPathInput.trim() || '/api/reports/revenue-by-category',
+      reportsPeakHoursPath: reportsPeakHoursPathInput.trim() || '/api/reports/peak-hours'
     };
     onApiSettingsChange(newSettings);
     setTestResult(null);
@@ -400,6 +412,58 @@ export default function SupportView({
                       value={invoicesPathInput}
                       onChange={(e) => setInvoicesPathInput(e.target.value)}
                       placeholder="/api/invoices"
+                      className="w-full bg-surf-low border border-border-subtle rounded-lg px-3.5 py-2 text-sm focus:ring-1 focus:ring-brand-secondary outline-none text-text-primary"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="font-mono text-[10px] font-bold text-text-secondary uppercase tracking-wider block">
+                      Reports: Sales Summary
+                    </label>
+                    <input
+                      type="text"
+                      value={reportsSalesPathInput}
+                      onChange={(e) => setReportsSalesPathInput(e.target.value)}
+                      placeholder="/api/reports/sales"
+                      className="w-full bg-surf-low border border-border-subtle rounded-lg px-3.5 py-2 text-sm focus:ring-1 focus:ring-brand-secondary outline-none text-text-primary"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="font-mono text-[10px] font-bold text-text-secondary uppercase tracking-wider block">
+                      Reports: Most Ordered
+                    </label>
+                    <input
+                      type="text"
+                      value={reportsMostOrderedPathInput}
+                      onChange={(e) => setReportsMostOrderedPathInput(e.target.value)}
+                      placeholder="/api/reports/most-ordered-items"
+                      className="w-full bg-surf-low border border-border-subtle rounded-lg px-3.5 py-2 text-sm focus:ring-1 focus:ring-brand-secondary outline-none text-text-primary"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="font-mono text-[10px] font-bold text-text-secondary uppercase tracking-wider block">
+                      Reports: Revenue by Category
+                    </label>
+                    <input
+                      type="text"
+                      value={reportsRevenueByCategoryPathInput}
+                      onChange={(e) => setReportsRevenueByCategoryPathInput(e.target.value)}
+                      placeholder="/api/reports/revenue-by-category"
+                      className="w-full bg-surf-low border border-border-subtle rounded-lg px-3.5 py-2 text-sm focus:ring-1 focus:ring-brand-secondary outline-none text-text-primary"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="font-mono text-[10px] font-bold text-text-secondary uppercase tracking-wider block">
+                      Reports: Peak Hours
+                    </label>
+                    <input
+                      type="text"
+                      value={reportsPeakHoursPathInput}
+                      onChange={(e) => setReportsPeakHoursPathInput(e.target.value)}
+                      placeholder="/api/reports/peak-hours"
                       className="w-full bg-surf-low border border-border-subtle rounded-lg px-3.5 py-2 text-sm focus:ring-1 focus:ring-brand-secondary outline-none text-text-primary"
                     />
                   </div>

@@ -30,7 +30,7 @@ export default function Sidebar({ currentTab, onTabChange, currentUser, onLogout
 
   // Admin sees full suite of tools; Chef sees Kitchen Display; Waiter sees Orders Terminal
   const adminMenuItems = [
-    { id: 'reports', label: 'Dashboard', icon: BarChart3 },
+    { id: 'reports', label: 'Reports & Analytics', icon: BarChart3 },
     { id: 'kitchen', label: 'Kitchen Display (Chef)', icon: ChefHat },
     { id: 'orders', label: 'Orders Terminal', icon: ClipboardList },
     { id: 'invoices', label: 'Invoices & Receipts', icon: Receipt },

@@ -34,7 +34,7 @@ export default function Header({
   // Human-friendly title for the active selected section
   const getSectionLabel = (tab: string) => {
     switch (tab) {
-      case 'reports': return 'Dashboard';
+      case 'reports': return 'Reports';
       case 'kitchen': return 'Kitchen';
       case 'orders': return 'Orders';
       case 'invoices': return 'Invoices';
