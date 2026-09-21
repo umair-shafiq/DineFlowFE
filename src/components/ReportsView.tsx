@@ -10,7 +10,7 @@ import {
 } from '../types';
 import { 
   TrendingUp, 
-  DollarSign, 
+  Banknote, 
   Receipt, 
   Percent, 
   Clock, 
@@ -18,17 +18,9 @@ import {
   RefreshCw,
   Award,
   Layers,
-  BarChart3,
-  CheckCircle2,
   AlertCircle,
-  Database,
   Flame,
-  ArrowUpRight,
-  Code2,
-  ChevronDown,
-  ChevronUp,
-  Filter,
-  PieChart
+  HelpCircle
 } from 'lucide-react';
 import { useCurrency } from '../context/CurrencyContext';
 import { apiReports, getApiSettings } from '../api';
@@ -77,8 +69,8 @@ export default function ReportsView({
   const [revenueByCategory, setRevenueByCategory] = useState<ReportRevenueByCategory[]>(INITIAL_REPORT_REVENUE_BY_CATEGORY);
   const [peakHours, setPeakHours] = useState<ReportPeakHour[]>(INITIAL_REPORT_PEAK_HOURS);
 
-  // Debug / Inspector Drawer state
-  const [showApiInspector, setShowApiInspector] = useState<boolean>(false);
+  // Hover state for Peak Hours bar chart
+  const [hoveredHour, setHoveredHour] = useState<number | null>(null);
 
   // Helper to apply preset date ranges
   const applyDatePreset = (preset: 'month' | '30days' | 'today') => {
@@ -208,7 +200,7 @@ export default function ReportsView({
         setSalesSummary(salesRes.value);
         successfulEndpointsCount++;
       } else {
-        console.warn('Endpoint GET /api/reports/sales failed or returned error, using fallback:', salesRes);
+        console.warn('Endpoint /api/reports/sales failed or returned error, using fallback');
       }
 
       // Handle Endpoint 2: Most Ordered Items
@@ -216,7 +208,7 @@ export default function ReportsView({
         setMostOrdered(mostOrderedRes.value);
         successfulEndpointsCount++;
       } else {
-        console.warn('Endpoint GET /api/reports/most-ordered-items failed, using fallback:', mostOrderedRes);
+        console.warn('Endpoint /api/reports/most-ordered-items failed, using fallback');
       }
 
       // Handle Endpoint 3: Revenue by Category
@@ -224,7 +216,7 @@ export default function ReportsView({
         setRevenueByCategory(categoryRes.value);
         successfulEndpointsCount++;
       } else {
-        console.warn('Endpoint GET /api/reports/revenue-by-category failed, using fallback:', categoryRes);
+        console.warn('Endpoint /api/reports/revenue-by-category failed, using fallback');
       }
 
       // Handle Endpoint 4: Peak Hours
@@ -232,22 +224,21 @@ export default function ReportsView({
         setPeakHours(peakHoursRes.value);
         successfulEndpointsCount++;
       } else {
-        console.warn('Endpoint GET /api/reports/peak-hours failed, using fallback:', peakHoursRes);
+        console.warn('Endpoint /api/reports/peak-hours failed, using fallback');
       }
 
-      // If at least one endpoint responded from Spring Boot, mark source as live API
+      // If at least one endpoint responded from Spring Boot, mark source as live
       if (successfulEndpointsCount > 0) {
         setDataSource('api');
         setFetchError(null);
       } else {
-        // All 4 failed (likely backend not running yet on port 8080)
         const fallback = computeLocalFallback();
         setSalesSummary(fallback.sales);
         setMostOrdered(fallback.mostOrdered);
         setRevenueByCategory(fallback.revenueByCategory);
         setPeakHours(fallback.peakHours);
         setDataSource('fallback');
-        setFetchError('Spring Boot API on port 8080 is unreachable. Displaying fallback metrics.');
+        setFetchError('Database server on port 8080 is unreachable. Displaying saved metrics.');
       }
     } catch (err: any) {
       console.error('Reports fetch error:', err);
@@ -257,7 +248,7 @@ export default function ReportsView({
       setRevenueByCategory(fallback.revenueByCategory);
       setPeakHours(fallback.peakHours);
       setDataSource('fallback');
-      setFetchError(err?.message || 'Failed to connect to reports endpoints.');
+      setFetchError(err?.message || 'Failed to connect to reports service.');
     } finally {
       setLastUpdated(new Date().toLocaleTimeString());
       setIsLoading(false);
@@ -332,11 +323,11 @@ export default function ReportsView({
               Reports & Executive Analytics
             </h1>
             <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-mono font-bold px-2 py-0.5 rounded-md bg-brand-secondary/10 text-brand-secondary">
-              Admin Exclusive
+              Manager View
             </span>
           </div>
           <p className="text-text-secondary text-xs sm:text-sm font-medium">
-            Live sales summaries, top-selling dishes, category earnings, and operational peak rush hours.
+            Live sales performance, top-selling dishes, category revenue, and peak customer rush hours.
           </p>
         </div>
 
@@ -348,10 +339,10 @@ export default function ReportsView({
                 ? 'bg-brand-accent-green/10 border-brand-accent-green/25 text-brand-accent-green'
                 : 'bg-amber-500/10 border-amber-500/25 text-amber-600'
             }`}
-            title={`Data source: ${dataSource === 'api' ? 'Live Spring Boot Endpoints' : 'Local Fallback'}`}
+            title={`Status: ${dataSource === 'api' ? 'Live database connected' : 'Offline local mode'}`}
           >
             <span className={`w-2 h-2 rounded-full ${dataSource === 'api' ? 'bg-brand-accent-green animate-pulse' : 'bg-amber-500'}`} />
-            <span>{dataSource === 'api' ? 'Live Spring Boot DB' : 'Fallback / Local Mode'}</span>
+            <span>{dataSource === 'api' ? 'Live Connected' : 'Offline / Cached'}</span>
           </div>
 
           <button
@@ -359,7 +350,7 @@ export default function ReportsView({
             onClick={() => fetchReports(false)}
             disabled={isRefreshing}
             className="h-9 px-3.5 bg-white border border-border-subtle rounded-xl text-text-primary text-xs font-semibold hover:bg-surf-container flex items-center gap-1.5 transition-all active-scale shadow-xs cursor-pointer disabled:opacity-50"
-            title="Re-query all 4 reporting endpoints"
+            title="Refresh analytics data"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-brand-secondary' : 'text-text-secondary'}`} />
             <span>Refresh</span>
@@ -367,7 +358,7 @@ export default function ReportsView({
         </div>
       </div>
 
-      {/* Date Filter Toolbar (controls GET /api/reports/sales) */}
+      {/* Date Filter Toolbar */}
       <div className="bg-white border border-border-subtle rounded-2xl p-4 mb-8 shadow-xs" id="reports-date-filter-bar">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           
@@ -463,17 +454,17 @@ export default function ReportsView({
         )}
       </div>
 
-      {/* SECTION 1: Executive KPI Cards (from GET /api/reports/sales) */}
+      {/* SECTION 1: Executive KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8" id="reports-sales-kpis">
         
-        {/* KPI 1: Total Revenue */}
+        {/* KPI 1: Total Revenue (PKR/Currency formatted with Banknote/Wallet icon, no technical endpoint text) */}
         <div className="bg-white border border-border-subtle rounded-2xl p-5 shadow-xs flex flex-col justify-between hover:border-brand-secondary/40 transition-colors">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[11px] font-mono font-bold text-text-secondary uppercase tracking-wider">
               Total Revenue
             </span>
-            <div className="w-9 h-9 rounded-xl bg-brand-secondary/10 text-brand-secondary flex items-center justify-center">
-              <DollarSign className="w-5 h-5" />
+            <div className="w-9 h-9 rounded-xl bg-brand-secondary/10 text-brand-secondary flex items-center justify-center font-black text-xs font-mono">
+              <Banknote className="w-5 h-5" />
             </div>
           </div>
           <div>
@@ -481,8 +472,10 @@ export default function ReportsView({
               {formatPrice(salesSummary.totalRevenue)}
             </div>
             <div className="flex items-center justify-between mt-2 pt-2 border-t border-border-subtle text-[11px] text-text-secondary">
-              <span>Endpoint:</span>
-              <span className="font-mono text-[10px] text-brand-secondary font-bold">/api/reports/sales</span>
+              <span>Gross Sales:</span>
+              <span className="font-mono font-bold text-brand-secondary">
+                {salesSummary.totalOrders} {salesSummary.totalOrders === 1 ? 'Order' : 'Orders'} Billed
+              </span>
             </div>
           </div>
         </div>
@@ -502,8 +495,10 @@ export default function ReportsView({
               {salesSummary.totalOrders.toLocaleString()}
             </div>
             <div className="flex items-center justify-between mt-2 pt-2 border-t border-border-subtle text-[11px] text-text-secondary">
-              <span>Avg Ticket Size:</span>
-              <span className="font-mono font-bold text-text-primary">{formatPrice(avgOrderValue)}</span>
+              <span>Avg Spend Per Order:</span>
+              <span className="font-mono font-bold text-text-primary" title="Total Revenue divided by Total Orders">
+                {formatPrice(avgOrderValue)}
+              </span>
             </div>
           </div>
         </div>
@@ -523,13 +518,15 @@ export default function ReportsView({
               {formatPrice(salesSummary.totalTax)}
             </div>
             <div className="flex items-center justify-between mt-2 pt-2 border-t border-border-subtle text-[11px] text-text-secondary">
-              <span>Effective Rate:</span>
-              <span className="font-mono font-bold text-text-primary">{taxPercentage.toFixed(1)}%</span>
+              <span>Tax Rate Share:</span>
+              <span className="font-mono font-bold text-text-primary" title="Total Tax divided by Total Revenue">
+                {taxPercentage.toFixed(1)}% of sales
+              </span>
             </div>
           </div>
         </div>
 
-        {/* KPI 4: Net Revenue */}
+        {/* KPI 4: Net Sales */}
         <div className="bg-white border border-border-subtle rounded-2xl p-5 shadow-xs flex flex-col justify-between hover:border-brand-accent-green/40 transition-colors">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[11px] font-mono font-bold text-text-secondary uppercase tracking-wider">
@@ -544,8 +541,8 @@ export default function ReportsView({
               {formatPrice(netRevenue)}
             </div>
             <div className="flex items-center justify-between mt-2 pt-2 border-t border-border-subtle text-[11px] text-text-secondary">
-              <span>Net Margin:</span>
-              <span className="font-mono font-bold text-brand-accent-green">
+              <span>Restaurant Net Share:</span>
+              <span className="font-mono font-bold text-brand-accent-green" title="Net Sales divided by Total Revenue">
                 {salesSummary.totalRevenue > 0 ? `${((netRevenue / salesSummary.totalRevenue) * 100).toFixed(1)}%` : '100%'}
               </span>
             </div>
@@ -557,7 +554,7 @@ export default function ReportsView({
       {/* SECTION 2 & 3: Most Ordered Items & Revenue By Category */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8" id="reports-middle-grid">
         
-        {/* Most Ordered Items (from GET /api/reports/most-ordered-items?limit=N) */}
+        {/* Most Ordered Items */}
         <div className="bg-white border border-border-subtle rounded-2xl p-6 shadow-xs flex flex-col justify-between" id="reports-most-ordered-card">
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -572,7 +569,7 @@ export default function ReportsView({
 
               {/* Limit Selector */}
               <div className="flex items-center gap-1 bg-surf-low border border-border-subtle rounded-lg p-0.5 text-[11px]">
-                <span className="px-1.5 text-text-secondary font-mono font-semibold">Top:</span>
+                <span className="px-1.5 text-text-secondary font-mono font-semibold">Show Top:</span>
                 {[3, 5, 10].map(lim => (
                   <button
                     key={lim}
@@ -589,7 +586,7 @@ export default function ReportsView({
               </div>
             </div>
             <p className="text-text-secondary text-xs mb-6 font-medium">
-              Ranked by quantity ordered via <code className="font-mono text-brand-secondary font-semibold">/api/reports/most-ordered-items?limit={itemLimit}</code>
+              Most popular menu items ranked by total quantity ordered
             </p>
 
             {/* Item Rankings List */}
@@ -601,7 +598,6 @@ export default function ReportsView({
               <div className="space-y-4">
                 {mostOrdered.map((dish, idx) => {
                   const percentage = maxSoldQuantity > 0 ? (dish.totalQuantitySold / maxSoldQuantity) * 100 : 0;
-                  const isTop3 = idx < 3;
                   const rankBadgeClass = idx === 0 
                     ? 'bg-amber-400 text-slate-900 border-amber-300' 
                     : idx === 1 
@@ -648,14 +644,14 @@ export default function ReportsView({
           </div>
 
           <div className="mt-6 pt-4 border-t border-border-subtle/80 flex items-center justify-between text-[11px] text-text-secondary">
-            <span>Aggregated from closed and active tickets</span>
+            <span>Aggregated from completed orders</span>
             <span className="font-mono text-brand-primary font-bold">
               Total Units: {mostOrdered.reduce((acc, curr) => acc + curr.totalQuantitySold, 0)}
             </span>
           </div>
         </div>
 
-        {/* Revenue by Category (from GET /api/reports/revenue-by-category) */}
+        {/* Revenue by Category */}
         <div className="bg-white border border-border-subtle rounded-2xl p-6 shadow-xs flex flex-col justify-between" id="reports-category-card">
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -672,7 +668,7 @@ export default function ReportsView({
               </span>
             </div>
             <p className="text-text-secondary text-xs mb-6 font-medium">
-              Category revenue share via <code className="font-mono text-emerald-600 font-semibold">/api/reports/revenue-by-category</code>
+              Sales distribution across menu categories
             </p>
 
             {/* Category Bars & Cards */}
@@ -720,7 +716,7 @@ export default function ReportsView({
           </div>
 
           <div className="mt-6 pt-4 border-t border-border-subtle/80 flex items-center justify-between text-[11px] text-text-secondary">
-            <span>Total Classified Revenue</span>
+            <span>Total Categorized Revenue</span>
             <span className="font-mono text-brand-primary font-bold">
               {formatPrice(totalCategoryRevenueSum)}
             </span>
@@ -729,7 +725,7 @@ export default function ReportsView({
 
       </div>
 
-      {/* SECTION 4: Peak Hours Analysis (from GET /api/reports/peak-hours) */}
+      {/* SECTION 4: Peak Hours Analysis */}
       <div className="bg-white border border-border-subtle rounded-2xl p-6 shadow-xs mb-8" id="reports-peak-hours-card">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
@@ -742,20 +738,34 @@ export default function ReportsView({
               </h2>
             </div>
             <p className="text-text-secondary text-xs mt-1 font-medium">
-              Order volume distribution by hour of day (00:00 to 23:00) via <code className="font-mono text-amber-600 font-semibold">/api/reports/peak-hours</code>
+              Order volume distribution across 24 hours (00:00 to 23:00)
             </p>
           </div>
 
-          {busiestHour && (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 border border-amber-500/25 rounded-xl text-amber-700 text-xs font-bold shrink-0">
-              <Flame className="w-4 h-4 text-amber-500 animate-bounce" />
-              <span>Busiest Hour: {formatHourLabel(busiestHour.hourOfDay)} ({busiestHour.orderCount} orders)</span>
-            </div>
-          )}
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Live active hover indicator badge */}
+            {hoveredHour !== null && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-primary text-white rounded-xl text-xs font-semibold shadow-xs transition-all animate-fadeIn">
+                <Clock className="w-3.5 h-3.5 text-brand-secondary" />
+                <span>
+                  {formatHourLabel(hoveredHour)}: <strong className="text-brand-secondary font-mono">
+                    {peakHours.find(p => p.hourOfDay === hoveredHour)?.orderCount || 0}
+                  </strong> orders
+                </span>
+              </div>
+            )}
+
+            {busiestHour && (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 border border-amber-500/25 rounded-xl text-amber-700 text-xs font-bold shrink-0">
+                <Flame className="w-4 h-4 text-amber-500" />
+                <span>Busiest Rush: {formatHourLabel(busiestHour.hourOfDay)} ({busiestHour.orderCount} orders)</span>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* 24-Hour Visual Bar Chart */}
-        <div className="pt-6 pb-2 overflow-x-auto no-scrollbar">
+        {/* 24-Hour Visual Bar Chart (with generous top padding so tooltips never clip) */}
+        <div className="pt-10 pb-2 overflow-x-auto no-scrollbar">
           <div className="min-w-[640px]">
             {/* Chart Area */}
             <div className="h-48 flex items-end gap-2 sm:gap-3 px-2 border-b border-border-subtle pb-2">
@@ -764,21 +774,33 @@ export default function ReportsView({
                 const count = hourData ? hourData.orderCount : 0;
                 const isPeak = busiestHour && count === busiestHour.orderCount && count > 0;
                 const heightPercent = maxPeakOrderCount > 0 ? (count / maxPeakOrderCount) * 100 : 0;
+                const isHovered = hoveredHour === hour;
 
                 return (
                   <div 
                     key={hour} 
+                    onMouseEnter={() => setHoveredHour(hour)}
+                    onMouseLeave={() => setHoveredHour(null)}
+                    onClick={() => setHoveredHour(hour)}
                     className="flex-1 flex flex-col items-center justify-end h-full group relative cursor-pointer"
                   >
-                    {/* Tooltip on hover */}
-                    <div className="absolute -top-10 opacity-0 group-hover:opacity-100 transition-opacity bg-brand-primary text-white text-[10px] font-mono font-bold py-1 px-2 rounded shadow-md pointer-events-none whitespace-nowrap z-20">
-                      {formatHourLabel(hour)}: {count} {count === 1 ? 'order' : 'orders'}
-                    </div>
+                    {/* Clear, well-proportioned hover card above the bar */}
+                    {isHovered && (
+                      <div className="absolute -top-12 z-30 flex flex-col items-center pointer-events-none transition-all">
+                        <div className="bg-slate-900 text-white text-[11px] font-medium py-1 px-2.5 rounded-lg shadow-lg whitespace-nowrap border border-slate-700 flex items-center gap-1.5">
+                          <span className="font-bold text-amber-400">{formatHourLabel(hour)}</span>
+                          <span className="text-slate-400">|</span>
+                          <span className="font-bold font-mono">{count} {count === 1 ? 'order' : 'orders'}</span>
+                        </div>
+                        {/* Downward pointing arrow */}
+                        <div className="w-2 h-2 bg-slate-900 rotate-45 -mt-1 border-r border-b border-slate-700" />
+                      </div>
+                    )}
 
                     {/* Order count label above active bars */}
                     {count > 0 && (
                       <span className={`text-[10px] font-mono font-bold mb-1 transition-colors ${
-                        isPeak ? 'text-amber-600 font-black' : 'text-text-secondary group-hover:text-brand-primary'
+                        isPeak ? 'text-amber-600 font-black' : isHovered ? 'text-brand-primary font-black' : 'text-text-secondary'
                       }`}>
                         {count}
                       </span>
@@ -788,9 +810,11 @@ export default function ReportsView({
                     <div 
                       className={`w-full rounded-t-md transition-all duration-300 ${
                         count === 0 
-                          ? 'h-1 bg-surf-container' 
+                          ? 'h-1 bg-surf-container hover:bg-slate-300' 
                           : isPeak 
-                          ? 'bg-amber-500 hover:bg-amber-600 shadow-sm' 
+                          ? 'bg-amber-500 hover:bg-amber-600 shadow-xs' 
+                          : isHovered
+                          ? 'bg-brand-primary shadow-xs'
                           : 'bg-brand-secondary hover:bg-brand-secondary/80'
                       }`}
                       style={{ height: count > 0 ? `${Math.max(heightPercent, 8)}%` : '4px' }}
@@ -803,10 +827,15 @@ export default function ReportsView({
             {/* X-Axis Hour Labels */}
             <div className="flex items-center gap-2 sm:gap-3 px-2 pt-2 text-[10px] font-mono text-text-secondary">
               {Array.from({ length: 24 }).map((_, hour) => {
-                // Show label every 2 or 3 hours on small sizes, or every hour on wide
                 const showLabel = hour % 3 === 0 || hour === 23;
+                const isHovered = hoveredHour === hour;
                 return (
-                  <div key={hour} className="flex-1 text-center truncate">
+                  <div 
+                    key={hour} 
+                    className={`flex-1 text-center truncate transition-colors ${
+                      isHovered ? 'text-brand-primary font-bold' : ''
+                    }`}
+                  >
                     {showLabel ? formatHourLabel(hour) : '·'}
                   </div>
                 );
@@ -820,118 +849,24 @@ export default function ReportsView({
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded bg-amber-500" />
-              <span className="font-medium">Peak Rush Window</span>
+              <span className="font-medium">Peak Rush Hour</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded bg-brand-secondary" />
-              <span className="font-medium">Standard Hours</span>
+              <span className="font-medium">Regular Order Window</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded bg-surf-container" />
               <span className="font-medium">No Orders</span>
             </div>
           </div>
-          <span className="font-mono text-[11px]">
-            Peak Load: {busiestHour ? `${busiestHour.orderCount} orders/hr` : '0 orders/hr'}
+          <span className="font-mono text-[11px] text-text-primary font-semibold">
+            Maximum Volume: {busiestHour ? `${busiestHour.orderCount} orders in 1 hour` : '0 orders'}
           </span>
         </div>
-      </div>
-
-      {/* SECTION 5: Backend Endpoint Inspector (Documentation & Live Payloads) */}
-      <div className="bg-white border border-border-subtle rounded-2xl p-5 shadow-xs" id="reports-endpoint-inspector">
-        <div 
-          className="flex items-center justify-between cursor-pointer select-none"
-          onClick={() => setShowApiInspector(!showApiInspector)}
-        >
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-surf-container rounded-xl text-brand-primary">
-              <Code2 className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="font-display font-bold text-sm text-brand-primary">
-                Backend Reporting Endpoints & Payload Inspector
-              </h3>
-              <p className="text-[11px] text-text-secondary font-medium">
-                Verify the 4 Spring Boot REST API endpoints, request schemas, and responses.
-              </p>
-            </div>
-          </div>
-          <button className="p-2 text-text-secondary hover:text-brand-primary transition-colors">
-            {showApiInspector ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-          </button>
-        </div>
-
-        {showApiInspector && (
-          <div className="mt-5 pt-4 border-t border-border-subtle grid grid-cols-1 lg:grid-cols-2 gap-4">
-            
-            {/* Endpoint 1 */}
-            <div className="p-3.5 bg-surf-low rounded-xl border border-border-subtle text-xs font-mono">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded">
-                  GET
-                </span>
-                <span className="text-[10px] text-text-secondary font-semibold">Sales Summary</span>
-              </div>
-              <p className="text-brand-primary font-bold break-all mb-2 text-[11px]">
-                /api/reports/sales?startDate={startDate}&endDate={endDate}
-              </p>
-              <pre className="p-2.5 bg-brand-primary text-slate-100 rounded-lg text-[10px] overflow-x-auto leading-tight">
-                {JSON.stringify(salesSummary, null, 2)}
-              </pre>
-            </div>
-
-            {/* Endpoint 2 */}
-            <div className="p-3.5 bg-surf-low rounded-xl border border-border-subtle text-xs font-mono">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded">
-                  GET
-                </span>
-                <span className="text-[10px] text-text-secondary font-semibold">Top N Most Ordered</span>
-              </div>
-              <p className="text-brand-primary font-bold break-all mb-2 text-[11px]">
-                /api/reports/most-ordered-items?limit={itemLimit}
-              </p>
-              <pre className="p-2.5 bg-brand-primary text-slate-100 rounded-lg text-[10px] overflow-x-auto leading-tight">
-                {JSON.stringify(mostOrdered, null, 2)}
-              </pre>
-            </div>
-
-            {/* Endpoint 3 */}
-            <div className="p-3.5 bg-surf-low rounded-xl border border-border-subtle text-xs font-mono">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded">
-                  GET
-                </span>
-                <span className="text-[10px] text-text-secondary font-semibold">Revenue By Category</span>
-              </div>
-              <p className="text-brand-primary font-bold break-all mb-2 text-[11px]">
-                /api/reports/revenue-by-category
-              </p>
-              <pre className="p-2.5 bg-brand-primary text-slate-100 rounded-lg text-[10px] overflow-x-auto leading-tight">
-                {JSON.stringify(revenueByCategory, null, 2)}
-              </pre>
-            </div>
-
-            {/* Endpoint 4 */}
-            <div className="p-3.5 bg-surf-low rounded-xl border border-border-subtle text-xs font-mono">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded">
-                  GET
-                </span>
-                <span className="text-[10px] text-text-secondary font-semibold">Peak Order Hours</span>
-              </div>
-              <p className="text-brand-primary font-bold break-all mb-2 text-[11px]">
-                /api/reports/peak-hours
-              </p>
-              <pre className="p-2.5 bg-brand-primary text-slate-100 rounded-lg text-[10px] overflow-x-auto leading-tight">
-                {JSON.stringify(peakHours, null, 2)}
-              </pre>
-            </div>
-
-          </div>
-        )}
       </div>
 
     </div>
   );
 }
+
